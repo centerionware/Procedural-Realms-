@@ -4,39 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Procedural Realms</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      body {
-        overscroll-behavior: none;
-      }
-      @keyframes hit-animation {
-        0% { transform: scale(1); filter: brightness(1); }
-        50% { transform: scale(1.1); filter: brightness(2) drop-shadow(0 0 4px #ef4444); }
-        100% { transform: scale(1); filter: brightness(1); }
-      }
-      .animate-hit {
-        animation: hit-animation 0.2s ease-out;
-      }
-      @keyframes move-target-pulse {
-        0%, 100% {
-          transform: scale(1);
-          opacity: 0.7;
-        }
-        50% {
-          transform: scale(0.8);
-          opacity: 0.4;
-        }
-      }
-      .animate-move-target-pulse {
-        animation: move-target-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-      }
-    </style>
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "vite": "https://aistudiocdn.com/vite@^7.1.7",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.4"
   }
 }
 </script>
