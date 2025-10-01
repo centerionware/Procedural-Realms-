@@ -18,5 +18,4 @@ jobs:
     with:
       publish_frontend: true
       publish_backend: false
-
     secrets: inherit
