@@ -1,0 +1,34 @@
+name: 3. Build Frontend
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build:
+    name: Build Frontend Artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Generate package-lock.json
+        run: npm install --package-lock-only
+
+      - name: Install dependencies using lockfile
+        run: npm ci
+
+      - name: Build frontend application
+        run: npm run build:frontend
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist

@@ -1,0 +1,21 @@
+name: 10. Frontend Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_frontend:
+    name: Build Frontend
+    uses: ./.github/workflows/03-build-frontend.yaml
+    secrets: inherit
+
+  publish_frontend:
+    name: Publish Frontend to gh-pages
+    needs: build_frontend
+    permissions:
+      contents: write
+    uses: ./.github/workflows/04-publish-to-branches.yaml
+    with:
+      publish_frontend: true
+      publish_backend: false
+    secrets: inherit
