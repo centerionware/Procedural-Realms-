@@ -326,7 +326,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        className="flex-grow w-full bg-gray-800 overflow-hidden relative cursor-pointer touch-none"
+        className="flex-grow w-full bg-gray-800 overflow-hidden relative cursor-pointer touch-none select-none"
       >
         {currentMapData && (
           <PlayfieldView 
