@@ -1,0 +1,5 @@
+{
+  "name": "Procedural Realms",
+  "description": "A mobile-first adventure game featuring a robust, extensible game system with procedurally generated characters, items, and playfields. This application serves as a blueprint for modern game architecture in React.",
+  "requestFramePermissions": []
+}
