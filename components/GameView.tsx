@@ -46,6 +46,45 @@ const isColliding = (pos: Vector2, playfield: Playfield): boolean => {
   return false;
 };
 
+const findNearestValidTile = (pos: Vector2, playfield: Playfield): Vector2 => {
+    const startTileX = Math.floor(pos.x / TILE_SIZE);
+    const startTileY = Math.floor(pos.y / TILE_SIZE);
+
+    // Spiral search
+    let x = 0;
+    let y = 0;
+    let dx = 0;
+    let dy = -1;
+    const maxRadius = 10; // Search up to 10 tiles away
+
+    for (let i = 0; i < Math.pow(maxRadius * 2 + 1, 2); i++) {
+        const checkTileX = startTileX + x;
+        const checkTileY = startTileY + y;
+
+        if (checkTileX >= 0 && checkTileX < playfield[0].length && checkTileY >= 0 && checkTileY < playfield.length) {
+            const potentialPos = {
+                x: checkTileX * TILE_SIZE + TILE_SIZE / 2 - PLAYER_SIZE / 2,
+                y: checkTileY * TILE_SIZE + TILE_SIZE / 2 - PLAYER_SIZE / 2
+            };
+            if (!isColliding(potentialPos, playfield)) {
+                return potentialPos;
+            }
+        }
+
+        if (x === y || (x < 0 && x === -y) || (x > 0 && x === 1 - y)) {
+            [dx, dy] = [-dy, dx];
+        }
+        x += dx;
+        y += dy;
+    }
+    
+    // Failsafe: return center of map
+    return { 
+        x: (playfield[0].length * TILE_SIZE) / 2, 
+        y: (playfield.length * TILE_SIZE) / 2 
+    };
+};
+
 interface GameViewProps {
   onExit: () => void;
   onGameOver: () => void;
@@ -64,7 +103,16 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     });
   }, []);
 
-  const [world, setWorld] = useState<Map<string, WorldMap>>(new Map());
+  const [world, _setWorld] = useState<Map<string, WorldMap>>(new Map());
+  const worldRef = useRef(world);
+  const setWorld: React.Dispatch<React.SetStateAction<Map<string, WorldMap>>> = useCallback((action) => {
+    _setWorld(currentWorld => {
+        const newState = typeof action === 'function' ? (action as (prevState: Map<string, WorldMap>) => Map<string, WorldMap>)(currentWorld) : action;
+        worldRef.current = newState;
+        return newState;
+    });
+  }, []);
+
   const [currentMapKey, setCurrentMapKey] = useState('0,0');
   
   const [messages, setMessages] = useState<string[]>([
@@ -87,7 +135,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   const currentMapData = world.get(currentMapKey);
 
   useEffect(() => {
-    if (!world.has(currentMapKey)) {
+    if (!worldRef.current.has(currentMapKey)) {
       const { playfield: newPlayfield, colors: newColors } = generatePlayfield(MAP_WIDTH_TILES, MAP_HEIGHT_TILES, currentMapKey);
       const newItems = generateInitialItems(currentMapKey, 20, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield);
       const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield);
@@ -101,14 +149,18 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
       setWorld(prevWorld => new Map(prevWorld).set(currentMapKey, newMapData));
     } else {
-        const existingMap = world.get(currentMapKey)!;
+        const existingMap = worldRef.current.get(currentMapKey)!;
         if (existingMap.enemies.length === 0 && currentMapKey !== '10,10' && currentMapKey !== '0,0') {
              const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, existingMap.playfield);
-             existingMap.enemies = newEnemies;
-             setWorld(prevWorld => new Map(prevWorld).set(currentMapKey, existingMap));
+             setWorld(prevWorld => {
+                const currentMap = prevWorld.get(currentMapKey);
+                if (!currentMap) return prevWorld;
+                const updatedMap = { ...currentMap, enemies: newEnemies };
+                return new Map(prevWorld).set(currentMapKey, updatedMap);
+             });
         }
     }
-  }, [currentMapKey, world]);
+  }, [currentMapKey]);
   
   const addMessage = useCallback((message: string) => {
     setMessages(prev => [...prev.slice(-10), message]);
@@ -130,7 +182,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   };
 
   const updateMoveTarget = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!gameContainerRef.current || !currentMapData) return;
+    if (!gameContainerRef.current) return;
     const rect = gameContainerRef.current.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
@@ -142,12 +194,22 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
 
   const updateGame = (deltaTime: number) => {
+    const currentMapData = worldRef.current.get(currentMapKey);
     if (!currentMapData) return;
+
+    // Unstuck logic: If player is in a wall, find a safe spot and move them.
+    if (isColliding(playerRef.current.position, currentMapData.playfield)) {
+        const safePos = findNearestValidTile(playerRef.current.position, currentMapData.playfield);
+        setPlayer(p => ({...p, position: safePos}));
+        return; // Skip the rest of the update for this frame.
+    }
+
     const now = Date.now();
     // Cap delta time to prevent massive jumps on lag spikes or tab focus
     const dt = Math.min(deltaTime, 1 / 30);
     
-    const hasDot = player.inventory.some(item => item.type === ItemType.EASTER_EGG);
+    const playerState = playerRef.current;
+    const hasDot = playerState.inventory.some(item => item.type === ItemType.EASTER_EGG);
     if (hasDot && currentMapKey === '0,0') {
       onShowCredits();
       return;
@@ -162,78 +224,81 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     }
     
     if (moveTarget && keyboardDirection.x === 0 && keyboardDirection.y === 0) {
-      const dx = moveTarget.x - player.position.x;
-      const dy = moveTarget.y - player.position.y;
-      const distance = getDistance(player.position, moveTarget);
+      const dx = moveTarget.x - playerState.position.x;
+      const dy = moveTarget.y - playerState.position.y;
+      const distance = getDistance(playerState.position, moveTarget);
 
-      if (distance < player.stats.speed * dt) {
+      if (distance < playerState.stats.speed * dt) {
         setMoveTarget(null);
         finalDirection = { x: 0, y: 0 };
       } else {
         finalDirection = { x: dx / distance, y: dy / distance };
       }
     }
+    
+    // Calculate player's new state for this frame *before* using it for interactions.
+    if (playerState.currentHealth <= 0) {
+      onGameOver();
+      return;
+    }
+    
+    let newPos = { ...playerState.position };
+    const deltaX = finalDirection.x * playerState.stats.speed * dt;
+    const deltaY = finalDirection.y * playerState.stats.speed * dt;
+    
+    const tempPosX = { ...newPos, x: newPos.x + deltaX };
+    if (!isColliding(tempPosX, currentMapData.playfield)) {
+      newPos.x += deltaX;
+    }
 
-    setPlayer(p => {
-      if (p.currentHealth <= 0) {
-        onGameOver();
-        return p;
-      }
-      
-      let newPos = { ...p.position };
-      const deltaX = finalDirection.x * p.stats.speed * dt;
-      const deltaY = finalDirection.y * p.stats.speed * dt;
-      
-      const tempPosX = { ...newPos, x: newPos.x + deltaX };
-      if (!isColliding(tempPosX, currentMapData.playfield)) {
-        newPos.x += deltaX;
-      }
+    const tempPosY = { ...newPos, y: newPos.y + deltaY };
+    if (!isColliding(tempPosY, currentMapData.playfield)) {
+      newPos.y += deltaY;
+    }
 
-      const tempPosY = { ...newPos, y: newPos.y + deltaY };
-      if (!isColliding(tempPosY, currentMapData.playfield)) {
-        newPos.y += deltaY;
-      }
+    const worldWidth = currentMapData.playfield[0].length * TILE_SIZE;
+    const worldHeight = currentMapData.playfield.length * TILE_SIZE;
+    const [mapX, mapY] = currentMapKey.split(',').map(Number);
+    
+    let mapChanged = false;
+    const spawnMargin = TILE_SIZE * 2;
 
-      const worldWidth = currentMapData.playfield[0].length * TILE_SIZE;
-      const worldHeight = currentMapData.playfield.length * TILE_SIZE;
-      const [mapX, mapY] = currentMapKey.split(',').map(Number);
-      
-      let mapChanged = false;
-      const spawnMargin = TILE_SIZE * 2;
+    if (newPos.x > worldWidth - PLAYER_SIZE) {
+      setCurrentMapKey(`${mapX + 1},${mapY}`);
+      newPos = { x: spawnMargin, y: newPos.y };
+      mapChanged = true;
+    } else if (newPos.x < 0) {
+      setCurrentMapKey(`${mapX - 1},${mapY}`);
+      newPos = { x: worldWidth - PLAYER_SIZE - spawnMargin, y: newPos.y };
+      mapChanged = true;
+    } else if (newPos.y > worldHeight - PLAYER_SIZE) {
+      setCurrentMapKey(`${mapX},${mapY + 1}`);
+      newPos = { x: newPos.x, y: spawnMargin };
+      mapChanged = true;
+    } else if (newPos.y < 0) {
+      setCurrentMapKey(`${mapX},${mapY - 1}`);
+      newPos = { x: newPos.x, y: worldHeight - PLAYER_SIZE - spawnMargin };
+      mapChanged = true;
+    }
+    
+    if(mapChanged) {
+      setMoveTarget(null);
+      pickedUpItemIds.current.clear();
+    }
 
-      if (newPos.x > worldWidth - PLAYER_SIZE) {
-        setCurrentMapKey(`${mapX + 1},${mapY}`);
-        newPos = { x: spawnMargin, y: newPos.y };
-        mapChanged = true;
-      } else if (newPos.x < 0) {
-        setCurrentMapKey(`${mapX - 1},${mapY}`);
-        newPos = { x: worldWidth - PLAYER_SIZE - spawnMargin, y: newPos.y };
-        mapChanged = true;
-      } else if (newPos.y > worldHeight - PLAYER_SIZE) {
-        setCurrentMapKey(`${mapX},${mapY + 1}`);
-        newPos = { x: newPos.x, y: spawnMargin };
-        mapChanged = true;
-      } else if (newPos.y < 0) {
-        setCurrentMapKey(`${mapX},${mapY - 1}`);
-        newPos = { x: newPos.x, y: worldHeight - PLAYER_SIZE - spawnMargin };
-        mapChanged = true;
-      }
-      
-      if(mapChanged) {
-        setMoveTarget(null);
-        pickedUpItemIds.current.clear();
-      }
-      
-      return { ...p, position: newPos };
-    });
+    // Create a temporary player state object that reflects the new position for this frame's logic.
+    const playerStateForFrame = { ...playerState, position: newPos };
+    
+    // Queue the actual state update for React to process.
+    setPlayer(p => ({ ...p, position: newPos }));
 
     let updatedEnemies = currentMapData.enemies.map(enemy => {
-      const distanceToPlayer = getDistance(enemy.position, player.position);
+      const distanceToPlayer = getDistance(enemy.position, playerStateForFrame.position);
       let newEnemy = { ...enemy };
 
       if (distanceToPlayer < 400 && distanceToPlayer > enemy.size * 0.8) {
-        const dx = player.position.x - enemy.position.x;
-        const dy = player.position.y - enemy.position.y;
+        const dx = playerStateForFrame.position.x - enemy.position.x;
+        const dy = playerStateForFrame.position.y - enemy.position.y;
         const len = Math.sqrt(dx*dx + dy*dy);
         newEnemy.position.x += (dx/len) * newEnemy.stats.speed * dt;
         newEnemy.position.y += (dy/len) * newEnemy.stats.speed * dt;
@@ -242,18 +307,18 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
       if (distanceToPlayer < enemy.size && (now - (lastCombatTimeRef.current[enemy.id] || 0) > 1000)) {
         lastCombatTimeRef.current[enemy.id] = now;
         
-        const damageToPlayer = Math.max(1, enemy.stats.attack - player.stats.defense);
+        const damageToPlayer = Math.max(1, enemy.stats.attack - playerStateForFrame.stats.defense);
         addMessage(`💥 Took ${damageToPlayer} damage!`);
         setScreenShake(10);
-        setHitEffects(prev => ({...prev, [player.id]: now}));
+        setHitEffects(prev => ({...prev, [playerStateForFrame.id]: now}));
         setDamageNumbers(prev => [...prev, {
           id: `${now}-${Math.random()}`, text: `-${damageToPlayer}`,
-          position: { x: player.position.x + PLAYER_SIZE / 2, y: player.position.y },
+          position: { x: playerStateForFrame.position.x + PLAYER_SIZE / 2, y: playerStateForFrame.position.y },
           timestamp: now, color: 'text-red-500'
         }]);
         setPlayer(p => ({ ...p, currentHealth: Math.max(0, p.currentHealth - damageToPlayer)}));
         
-        const playerAttack = player.stats.attack + (player.equippedWeapon?.damage || 0);
+        const playerAttack = playerStateForFrame.stats.attack + (playerStateForFrame.equippedWeapon?.damage || 0);
         const damageToEnemy = Math.max(1, playerAttack - enemy.stats.defense);
         addMessage(`⚔️ Dealt ${damageToEnemy} damage!`);
         newEnemy.currentHealth = Math.max(0, newEnemy.currentHealth - damageToEnemy);
@@ -278,13 +343,26 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
       }
       addMessage(`💀 ${enemy.isBoss ? 'Boss' : 'Enemy'} vanquished!`);
       if (Math.random() > 0.3 || enemy.isBoss) {
-        newItems.push({ item: generateItem(), position: enemy.position });
+        newItems.push({ item: generateItem(enemy.isBoss), position: enemy.position });
       }
       return false;
     });
 
+    const itemsBeforePickup = newItems.length;
     newItems = newItems.filter(i => {
-      if (!pickedUpItemIds.current.has(i.item.id) && getDistance(player.position, i.position) < PLAYER_SIZE * 0.75) {
+      // If we've already picked this item up on this map, filter it out.
+      if (pickedUpItemIds.current.has(i.item.id)) {
+        return false;
+      }
+
+      const playerCenter = {
+        x: playerStateForFrame.position.x + PLAYER_SIZE / 2,
+        y: playerStateForFrame.position.y + PLAYER_SIZE / 2
+      };
+      const pickupRadius = PLAYER_SIZE * 0.75;
+
+      // Check for new pickup
+      if (getDistance(playerCenter, i.position) < pickupRadius) {
         pickedUpItemIds.current.add(i.item.id);
         addMessage(`⭐ Picked up ${i.item.name}!`);
         setPlayer(p => {
@@ -305,13 +383,20 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
           }
           return newPlayer;
         });
-        return false;
+        return false; // Remove from list
       }
-      return true;
+      return true; // Keep in list
     });
+    const itemWasPickedUp = newItems.length < itemsBeforePickup;
 
-    if (currentMapData.enemies.length !== updatedEnemies.length || currentMapData.items.length !== newItems.length) {
-      setWorld(prev => new Map(prev).set(currentMapKey, { ...currentMapData, enemies: updatedEnemies, items: newItems }));
+    const enemiesChanged = currentMapData.enemies.length !== updatedEnemies.length;
+
+    if (updatedEnemies.length > 0 || enemiesChanged || itemWasPickedUp) {
+      setWorld(prev => {
+        const currentMap = prev.get(currentMapKey) || currentMapData;
+        const newMapData = { ...currentMap, enemies: updatedEnemies, items: newItems };
+        return new Map(prev).set(currentMapKey, newMapData);
+      });
     }
   };
 

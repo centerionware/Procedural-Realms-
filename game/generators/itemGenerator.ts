@@ -1,5 +1,5 @@
-import { Item, ItemType, Weapon, Upgrade, PlayerStats, Vector2, Playfield } from '../../types';
-import { findValidSpawnPosition } from './playfieldGenerator';
+import { Item, ItemType, Weapon, Upgrade, PlayerStats, Vector2, Playfield, TileType } from '../../types';
+import { TILE_SIZE } from '../../components/GameView';
 
 const WEAPON_PREFIXES = ['Ancient', 'Glowing', 'Cursed', 'Mighty', 'Swift', 'Jagged'];
 const WEAPON_BASES = ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear'];
@@ -12,9 +12,10 @@ const STAT_KEYS: (keyof PlayerStats)[] = ['attack', 'defense', 'speed', 'maxHeal
 
 const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
-const generateWeapon = (): Weapon => {
+const generateWeapon = (isBossDrop?: boolean): Weapon => {
   const name = `${getRandomElement(WEAPON_PREFIXES)} ${getRandomElement(WEAPON_BASES)} ${getRandomElement(WEAPON_SUFFIXES)}`;
-  const damage = 5 + Math.floor(Math.random() * 20);
+  const damageBonus = isBossDrop ? 10 : 0;
+  const damage = 5 + damageBonus + Math.floor(Math.random() * 20);
   return {
     id: `item_${Date.now()}_${Math.random()}`,
     name,
@@ -25,17 +26,19 @@ const generateWeapon = (): Weapon => {
   };
 };
 
-const generateUpgrade = (): Upgrade => {
+const generateUpgrade = (isBossDrop?: boolean): Upgrade => {
   const name = `${getRandomElement(UPGRADE_PREFIXES)} ${getRandomElement(UPGRADE_SUFFIXES)}`;
   const statToBoost = getRandomElement(STAT_KEYS);
   
+  const bossMultiplier = isBossDrop ? 1.5 : 1;
   let boostValue: number;
+
   if (statToBoost === 'speed') {
-    boostValue = 30;
+    boostValue = Math.round(30 * bossMultiplier);
   } else if (statToBoost === 'maxHealth') {
-    boostValue = 10 + Math.floor(Math.random() * 11); // 10-20
+    boostValue = Math.round((10 + Math.floor(Math.random() * 11)) * bossMultiplier); // 10-20
   } else { // attack or defense
-    boostValue = 2 + Math.floor(Math.random() * 4); // 2-5
+    boostValue = Math.round((2 + Math.floor(Math.random() * 4)) * bossMultiplier); // 2-5
   }
   
   return {
@@ -47,11 +50,11 @@ const generateUpgrade = (): Upgrade => {
   };
 };
 
-export const generateItem = (): Item => {
+export const generateItem = (isBossDrop?: boolean): Item => {
   if (Math.random() > 0.5) {
-    return generateWeapon();
+    return generateWeapon(isBossDrop);
   } else {
-    return generateUpgrade();
+    return generateUpgrade(isBossDrop);
   }
 };
 
@@ -63,15 +66,40 @@ const generateEasterEgg = (): Item => ({
 });
 
 export const generateInitialItems = (mapKey: string, count: number, worldWidth: number, worldHeight: number, playfield: Playfield): ({ item: Item } & { position: Vector2 })[] => {
-    const items = Array.from({ length: count }).map(() => ({
-      item: generateItem(),
-      position: findValidSpawnPosition(playfield, worldWidth, worldHeight),
-    }));
+    const validTiles: Vector2[] = [];
+    playfield.forEach((row, y) => {
+        row.forEach((tile, x) => {
+            if (tile === TileType.FLOOR) {
+                validTiles.push({ x, y });
+            }
+        });
+    });
 
-    if (mapKey === '5,5') {
+    // Fisher-Yates shuffle to randomize spawn points
+    for (let i = validTiles.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [validTiles[i], validTiles[j]] = [validTiles[j], validTiles[i]];
+    }
+    
+    const itemsToSpawn = Math.min(count, validTiles.length);
+    const items = Array.from({ length: itemsToSpawn }).map((_, i) => {
+        const tile = validTiles[i];
+        const position = {
+            x: tile.x * TILE_SIZE + (Math.random() * (TILE_SIZE / 2)),
+            y: tile.y * TILE_SIZE + (Math.random() * (TILE_SIZE / 2)),
+        };
+        return { item: generateItem(), position };
+    });
+
+    if (mapKey === '5,5' && validTiles.length > itemsToSpawn) {
+        const tile = validTiles[itemsToSpawn];
+        const position = {
+             x: tile.x * TILE_SIZE + (Math.random() * (TILE_SIZE / 2)),
+             y: tile.y * TILE_SIZE + (Math.random() * (TILE_SIZE / 2)),
+        };
         items.push({
             item: generateEasterEgg(),
-            position: findValidSpawnPosition(playfield, worldWidth, worldHeight),
+            position,
         });
     }
 

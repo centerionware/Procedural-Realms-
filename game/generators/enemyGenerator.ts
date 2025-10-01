@@ -3,13 +3,19 @@ import { generateCharacter } from './characterGenerator';
 import { TILE_SIZE } from '../../components/GameView';
 import { findValidSpawnPosition } from './playfieldGenerator';
 
-const generateEnemy = (position: Vector2): Enemy => {
+const generateEnemy = (position: Vector2, mapKey: string): Enemy => {
+  const [mapX, mapY] = mapKey.split(',').map(Number);
+  const distanceFromOrigin = Math.abs(mapX) + Math.abs(mapY);
+  
+  // Enemies get 20% stronger for each map away from the start
+  const scalingFactor = 1 + distanceFromOrigin * 0.2;
+
   const character = generateCharacter();
   const stats = {
-    maxHealth: 20 + Math.floor(Math.random() * 30),
-    attack: 8 + Math.floor(Math.random() * 7),
-    defense: 1 + Math.floor(Math.random() * 5),
-    speed: 60 + Math.random() * 90, // was 1 + Math.random() * 1.5
+    maxHealth: Math.round((20 + Math.floor(Math.random() * 30)) * scalingFactor),
+    attack: Math.round((8 + Math.floor(Math.random() * 7)) * scalingFactor),
+    defense: 1 + Math.floor(Math.random() * 5) + Math.floor(distanceFromOrigin / 2),
+    speed: 60 + Math.random() * 90,
   };
 
   return {
@@ -83,7 +89,7 @@ export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight:
 
     for (let i = 0; i < enemyCount; i++) {
         const spawnPos = findValidSpawnPosition(playfield, worldWidth, worldHeight);
-        enemies.push(generateEnemy(spawnPos));
+        enemies.push(generateEnemy(spawnPos, mapKey));
     }
 
     // 25% chance to spawn a boss in the room
