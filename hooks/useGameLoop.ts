@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 
 const useGameLoop = (callback: (deltaTime: number) => void) => {
-  const requestRef = useRef<number>();
-  const previousTimeRef = useRef<number>();
+  // FIX: Provide an initial value to useRef, as it is required.
+  const requestRef = useRef<number | undefined>(undefined);
+  // FIX: Provide an initial value to useRef, as it is required.
+  const previousTimeRef = useRef<number | undefined>(undefined);
   const callbackRef = useRef(callback);
 
   useEffect(() => {
