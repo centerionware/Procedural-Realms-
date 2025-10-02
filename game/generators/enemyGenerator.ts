@@ -7,26 +7,29 @@ const generateEnemy = (position: Vector2, mapKey: string, player: Player): Enemy
   const [mapX, mapY] = mapKey.split(',').map(Number);
   const dist = Math.abs(mapX) + Math.abs(mapY);
 
-  // Distance acts as a cap on enemy power.
+  // General distance factor for health/defense
   const distanceFactor = 1 + dist * 0.35;
+  // More aggressive distance factor specifically for attack
+  const attackDistanceFactor = 1 + dist * 0.6;
 
   // Player power is a measure of their current stats vs initial stats.
   const playerPower = player.stats.attack + player.stats.defense + (player.stats.maxHealth / 10);
   const initialPlayerPower = 10 + 5 + (100 / 10); // ATK + DEF + HP/10
   const playerFactor = Math.max(1, playerPower / initialPlayerPower);
 
-  // Blend player and distance factors, capped by distance. This makes enemies
-  // scale with a powerful player, but ensures they're always tough far from spawn.
-  const combinedFactor = Math.min(distanceFactor, (distanceFactor + playerFactor) / 2);
-  
+  // Blend player and distance factors, capped by distance.
+  const healthDefCombinedFactor = Math.min(distanceFactor, (distanceFactor + playerFactor) / 2);
+  const attackCombinedFactor = Math.min(attackDistanceFactor, (attackDistanceFactor + playerFactor) / 2);
+
   // Add variance
-  const finalScalingFactor = combinedFactor * (0.9 + Math.random() * 0.2);
+  const finalHealthDefScaling = healthDefCombinedFactor * (0.9 + Math.random() * 0.2);
+  const finalAttackScaling = attackCombinedFactor * (0.9 + Math.random() * 0.2);
 
   const character = generateCharacter();
   const stats = {
-    maxHealth: Math.round((20 + Math.floor(Math.random() * 30)) * finalScalingFactor),
-    attack: Math.round((8 + Math.floor(Math.random() * 7)) * finalScalingFactor),
-    defense: Math.round((2 + Math.floor(Math.random() * 4)) * finalScalingFactor),
+    maxHealth: Math.round((20 + Math.floor(Math.random() * 30)) * finalHealthDefScaling),
+    attack: Math.round((8 + Math.floor(Math.random() * 7)) * finalAttackScaling),
+    defense: Math.round((2 + Math.floor(Math.random() * 4)) * finalHealthDefScaling),
     speed: 60 + Math.random() * 90,
   };
 

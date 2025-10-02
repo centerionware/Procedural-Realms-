@@ -2,6 +2,11 @@ import React, { useRef, useEffect } from 'react';
 import { Player, Playfield, Item, Vector2, TileType, Enemy, ItemType, DamageNumber, MapColors, CharacterSpriteData } from '../types';
 import { TILE_SIZE } from './GameView';
 
+interface TransitionState {
+  type: 'FADE' | 'IRIS' | 'ZOOM';
+  progress: number;
+}
+
 interface PlayfieldViewProps {
   playerPosition: Vector2;
   playfield: Playfield;
@@ -13,6 +18,7 @@ interface PlayfieldViewProps {
   damageNumbers: DamageNumber[];
   moveTarget: Vector2 | null;
   colors: MapColors;
+  transition: TransitionState | null;
 }
 
 const getTileColor = (tile: TileType, colors: MapColors): string => {
@@ -72,7 +78,7 @@ const drawCharacter = (ctx: CanvasRenderingContext2D, spriteData: CharacterSprit
   }
 };
 
-const PlayfieldView: React.FC<PlayfieldViewProps> = ({ playerPosition, playfield, items, enemies, player, screenShake, hitEffects, damageNumbers, moveTarget, colors }) => {
+const PlayfieldView: React.FC<PlayfieldViewProps> = ({ playerPosition, playfield, items, enemies, player, screenShake, hitEffects, damageNumbers, moveTarget, colors, transition }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameId = useRef<number>();
 
@@ -106,16 +112,32 @@ const PlayfieldView: React.FC<PlayfieldViewProps> = ({ playerPosition, playfield
       const cameraY = playerPosition.y + TILE_SIZE / 2;
       const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2 : 0;
       const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake * 2 : 0;
+      
+      let zoom = 1;
+      if (transition && transition.type === 'ZOOM') {
+        const { progress } = transition;
+        const maxZoom = 4;
+        if (progress < 0.5) {
+            // Zooming in: progress goes 0 -> 0.5, map to 1 -> maxZoom
+            const zoomProgress = progress / 0.5;
+            zoom = 1 + (maxZoom - 1) * zoomProgress;
+        } else {
+            // Zooming out: progress goes 0.5 -> 1, map to maxZoom -> 1
+            const zoomProgress = (progress - 0.5) / 0.5;
+            zoom = maxZoom - (maxZoom - 1) * zoomProgress;
+        }
+      }
 
       ctx.save();
       ctx.translate(Math.round(width / 2), Math.round(height / 2));
+      ctx.scale(zoom, zoom);
       ctx.translate(Math.round(-cameraX - shakeX), Math.round(-cameraY - shakeY));
 
       // Draw Playfield (Visible part only)
-      const startCol = Math.max(0, Math.floor((cameraX - width / 2) / TILE_SIZE));
-      const endCol = Math.min(playfield[0].length, Math.ceil((cameraX + width / 2) / TILE_SIZE));
-      const startRow = Math.max(0, Math.floor((cameraY - height / 2) / TILE_SIZE));
-      const endRow = Math.min(playfield.length, Math.ceil((cameraY + height / 2) / TILE_SIZE));
+      const startCol = Math.max(0, Math.floor((cameraX - (width / zoom) / 2) / TILE_SIZE));
+      const endCol = Math.min(playfield[0].length, Math.ceil((cameraX + (width / zoom) / 2) / TILE_SIZE));
+      const startRow = Math.max(0, Math.floor((cameraY - (height / zoom) / 2) / TILE_SIZE));
+      const endRow = Math.min(playfield.length, Math.ceil((cameraY + (height / zoom) / 2) / TILE_SIZE));
       
       ctx.strokeStyle = 'rgba(17, 24, 39, 0.2)';
       ctx.lineWidth = 1;
@@ -221,8 +243,8 @@ const PlayfieldView: React.FC<PlayfieldViewProps> = ({ playerPosition, playfield
         const alpha = Math.max(0, 1 - age);
         
         // Convert world coords to screen coords
-        const screenX = Math.round((dn.position.x - cameraX) + width / 2 - shakeX);
-        const screenY = Math.round((dn.position.y - cameraY) + height / 2 - shakeY);
+        const screenX = Math.round((dn.position.x - cameraX) * zoom + width / 2 - shakeX);
+        const screenY = Math.round((dn.position.y - cameraY) * zoom + height / 2 - shakeY);
         
         ctx.fillStyle = dn.color === 'text-red-500' ? `rgba(239, 68, 68, ${alpha})` : `rgba(252, 211, 77, ${alpha})`;
         ctx.shadowColor = "black";
@@ -245,7 +267,7 @@ const PlayfieldView: React.FC<PlayfieldViewProps> = ({ playerPosition, playfield
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [playerPosition, playfield, items, enemies, player, screenShake, hitEffects, damageNumbers, moveTarget, colors]);
+  }, [playerPosition, playfield, items, enemies, player, screenShake, hitEffects, damageNumbers, moveTarget, colors, transition]);
 
   return <canvas ref={canvasRef} style={{ touchAction: 'none' }} />;
 };

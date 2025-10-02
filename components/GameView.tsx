@@ -15,6 +15,15 @@ export const PLAYER_SIZE = 40;
 export const MAP_WIDTH_TILES = 50;
 export const MAP_HEIGHT_TILES = 50;
 
+type TransitionType = 'FADE' | 'IRIS' | 'ZOOM';
+interface TransitionState {
+  type: TransitionType;
+  progress: number; // 0 to 1
+  duration: number;
+  isMidpointReached: boolean;
+  nextMapData: { key: string; position: Vector2 };
+}
+
 const getDistance = (pos1: Vector2, pos2: Vector2) => {
   return Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2));
 };
@@ -129,17 +138,32 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   const [moveTarget, setMoveTarget] = useState<Vector2 | null>(null);
   const [isPointerDown, setIsPointerDown] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  
+  const [transition, _setTransition] = useState<TransitionState | null>(null);
+  const transitionRef = useRef(transition);
+  const setTransition: React.Dispatch<React.SetStateAction<TransitionState | null>> = useCallback((action) => {
+    _setTransition(current => {
+      const newState = typeof action === 'function' ? (action as (prevState: TransitionState | null) => TransitionState | null)(current) : action;
+      transitionRef.current = newState;
+      return newState;
+    });
+  }, []);
 
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const lastCombatTimeRef = useRef<{ [enemyId: string]: number }>({});
   const pickedUpItemIds = useRef(new Set<string>());
   const audioManager = useRef<AudioManager | null>(null);
 
-
   const currentMapData = world.get(currentMapKey);
 
   useEffect(() => {
     audioManager.current = new AudioManager();
+    
+    return () => {
+      // When the component unmounts, gracefully shut down the audio manager
+      // to stop music and release all audio resources.
+      audioManager.current?.shutdown(200);
+    };
   }, []);
 
   useEffect(() => {
@@ -171,34 +195,74 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   }, [currentMapKey, setWorld]);
 
   useEffect(() => {
-    const am = audioManager.current;
-    if (!am) return;
-
-    am.stopMusic();
-    
-    // If audio is already initialized, we can start music right away.
-    // Otherwise, it will be started on the first user interaction.
-    if (am.isInitialized) {
-        am.startMusic(currentMapKey);
-    }
-    
-    return () => {
-        am.stopMusic();
-    };
-  }, [currentMapKey]);
+    if (!transition) return;
   
+    let animationFrameId: number;
+    const startTime = performance.now() - transition.progress * transition.duration;
+  
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const newProgress = Math.min(elapsed / transition.duration, 1);
+  
+      setTransition(current => {
+        if (!current) return null;
+  
+        // Midpoint check: this is where the world state changes
+        if (newProgress >= 0.5 && !current.isMidpointReached) {
+          setCurrentMapKey(current.nextMapData.key);
+          setPlayer(p => ({ ...p, position: current.nextMapData.position }));
+          setMoveTarget(null);
+          pickedUpItemIds.current.clear();
+          audioManager.current?.startMusic(current.nextMapData.key, current.duration / 2);
+          
+          return { ...current, progress: newProgress, isMidpointReached: true };
+        }
+  
+        return { ...current, progress: newProgress };
+      });
+  
+      if (newProgress < 1) {
+        animationFrameId = requestAnimationFrame(animate);
+      } else {
+        // End of transition
+        setTransition(null);
+      }
+    };
+  
+    animationFrameId = requestAnimationFrame(animate);
+  
+    return () => cancelAnimationFrame(animationFrameId);
+    // This effect should ONLY re-run when a new transition is initiated.
+  }, [transition?.nextMapData.key]);
+
   const addMessage = useCallback((message: string) => {
     setMessages(prev => [...prev.slice(-10), message]);
+  }, []);
+
+  const handleMapChange = useCallback((newMapKey: string, newPlayerPosition: Vector2) => {
+    if (transitionRef.current) return;
+    
+    const transitions: TransitionType[] = ['FADE', 'IRIS', 'ZOOM'];
+    const selectedTransition = transitions[Math.floor(Math.random() * transitions.length)];
+    const duration = selectedTransition === 'ZOOM' ? 1000 : 700;
+    
+    audioManager.current?.stopMusic(duration / 2);
+
+    setTransition({
+      type: selectedTransition,
+      progress: 0,
+      duration,
+      isMidpointReached: false,
+      nextMapData: { key: newMapKey, position: newPlayerPosition },
+    });
   }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const am = audioManager.current;
     if (am) {
-      const needsMusicStart = !am.isInitialized;
-      am.initialize();
-      if (needsMusicStart && am.isInitialized) {
-        // Music couldn't start on mount, so start it on first interaction.
-        am.startMusic(currentMapKey);
+      if (!am.isInitialized) {
+        am.initialize();
+        am.startMusic(currentMapKey, 500); // Fade in on first interaction
       }
     }
     setIsPointerDown(true);
@@ -236,6 +300,8 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
 
   const updateGame = (deltaTime: number) => {
+    if (transitionRef.current) return; // Pause game during transitions
+
     const currentMapData = worldRef.current.get(currentMapKey);
     if (!currentMapData) return;
 
@@ -302,32 +368,22 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     const worldHeight = currentMapData.playfield.length * TILE_SIZE;
     const [mapX, mapY] = currentMapKey.split(',').map(Number);
     
-    let mapChanged = false;
     const spawnMargin = TILE_SIZE * 2;
 
     if (newPos.x > worldWidth - PLAYER_SIZE) {
-      setCurrentMapKey(`${mapX + 1},${mapY}`);
-      newPos = { x: spawnMargin, y: newPos.y };
-      mapChanged = true;
+      handleMapChange(`${mapX + 1},${mapY}`, { x: spawnMargin, y: newPos.y });
+      return;
     } else if (newPos.x < 0) {
-      setCurrentMapKey(`${mapX - 1},${mapY}`);
-      newPos = { x: worldWidth - PLAYER_SIZE - spawnMargin, y: newPos.y };
-      mapChanged = true;
+      handleMapChange(`${mapX - 1},${mapY}`, { x: worldWidth - PLAYER_SIZE - spawnMargin, y: newPos.y });
+      return;
     } else if (newPos.y > worldHeight - PLAYER_SIZE) {
-      setCurrentMapKey(`${mapX},${mapY + 1}`);
-      newPos = { x: newPos.x, y: spawnMargin };
-      mapChanged = true;
+      handleMapChange(`${mapX},${mapY + 1}`, { x: newPos.x, y: spawnMargin });
+      return;
     } else if (newPos.y < 0) {
-      setCurrentMapKey(`${mapX},${mapY - 1}`);
-      newPos = { x: newPos.x, y: worldHeight - PLAYER_SIZE - spawnMargin };
-      mapChanged = true;
+      handleMapChange(`${mapX},${mapY - 1}`, { x: newPos.x, y: worldHeight - PLAYER_SIZE - spawnMargin });
+      return;
     }
     
-    if(mapChanged) {
-      setMoveTarget(null);
-      pickedUpItemIds.current.clear();
-    }
-
     // Create a temporary player state object that reflects the new position for this frame's logic.
     const playerStateForFrame = { ...playerState, position: newPos };
     
@@ -449,6 +505,28 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
   useGameLoop(updateGame);
 
+  const getOverlayStyle = (): React.CSSProperties => {
+    if (!transition) return { opacity: 0, pointerEvents: 'none' };
+
+    const { type, progress } = transition;
+    // progressOut: 0 -> 1 during the first half of the transition
+    const progressOut = Math.min(1, progress / 0.5);
+    // progressIn: 0 -> 1 during the second half of the transition
+    const progressIn = Math.max(0, (progress - 0.5) / 0.5);
+
+    switch (type) {
+      case 'FADE':
+        const opacity = progress < 0.5 ? progressOut : (1 - progressIn);
+        return { opacity, pointerEvents: 'auto', transition: 'opacity 50ms linear' };
+      case 'IRIS':
+        const radius = progress < 0.5 ? (1 - progressOut) * 100 : progressIn * 100; // in %
+        return { clipPath: `circle(${radius}% at center)`, pointerEvents: 'auto' };
+      case 'ZOOM':
+      default:
+        return { opacity: 0, pointerEvents: 'none' };
+    }
+  };
+
   return (
     <div className="w-full h-full flex flex-col">
       <GameUI 
@@ -480,8 +558,13 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
             damageNumbers={damageNumbers}
             moveTarget={moveTarget}
             colors={currentMapData.colors}
+            transition={transition}
           />
         )}
+         <div 
+            className="absolute top-0 left-0 w-full h-full bg-black"
+            style={getOverlayStyle()}
+        />
       </div>
     </div>
   );

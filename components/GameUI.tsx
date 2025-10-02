@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Player } from '../types';
 
 interface GameUIProps {
@@ -20,6 +20,7 @@ const GameUI: React.FC<GameUIProps> = ({ player, onExit, messages, currentMapKey
   const isAtGoal = currentX === GOAL_COORDS.x && currentY === GOAL_COORDS.y;
 
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const [isConfirmingExit, setIsConfirmingExit] = useState(false);
 
   useEffect(() => {
     if (logContainerRef.current) {
@@ -28,79 +29,114 @@ const GameUI: React.FC<GameUIProps> = ({ player, onExit, messages, currentMapKey
   }, [messages]);
 
   return (
-    <div className="w-full bg-gray-900/80 p-2 md:p-4 flex justify-between items-center shadow-lg z-50">
-      <div className="flex items-start gap-4 md:gap-6">
-        <div>
-          <p className="text-sm text-cyan-400">HEALTH</p>
-          <div className="w-32 md:w-40 h-4 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-green-500 transition-all duration-300"
-              style={{ width: `${healthPercentage}%` }}
-            ></div>
+    <>
+      <div className="w-full bg-gray-900/80 p-2 md:p-4 flex justify-between items-center shadow-lg z-50">
+        {/* Left Side: Health & Stats */}
+        <div className="flex items-start gap-4 md:gap-6">
+          <div>
+            <p className="text-sm text-cyan-400">HEALTH</p>
+            <div className="w-32 md:w-40 h-4 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-green-500 transition-all duration-300"
+                style={{ width: `${healthPercentage}%` }}
+              ></div>
+            </div>
+            <p className="text-xs font-bold">{player.currentHealth} / {player.stats.maxHealth}</p>
           </div>
-          <p className="text-xs font-bold">{player.currentHealth} / {player.stats.maxHealth}</p>
-        </div>
-        <div className="hidden md:flex flex-col text-xs">
-          <p className="text-sm text-cyan-400">STATS</p>
-          <div className="flex gap-4">
-            <span>ATK: <span className="font-bold text-white">{player.stats.attack}</span></span>
-            <span>DEF: <span className="font-bold text-white">{player.stats.defense}</span></span>
-            <span>SPD: <span className="font-bold text-white">{player.stats.speed}</span></span>
+          <div className="hidden md:flex flex-col text-xs">
+            <p className="text-sm text-cyan-400">STATS</p>
+            <div className="flex gap-4">
+              <span>ATK: <span className="font-bold text-white">{player.stats.attack}</span></span>
+              <span>DEF: <span className="font-bold text-white">{player.stats.defense}</span></span>
+              <span>SPD: <span className="font-bold text-white">{player.stats.speed}</span></span>
+            </div>
+          </div>
+          <div className="hidden md:block">
+            <p className="text-sm text-cyan-400">WEAPON</p>
+            <p className="text-xs">{player.equippedWeapon?.name || 'Fists'}</p>
           </div>
         </div>
-        <div className="hidden md:block">
-          <p className="text-sm text-cyan-400">WEAPON</p>
-          <p className="text-xs">{player.equippedWeapon?.name || 'Fists'}</p>
+        
+        {/* Log Display */}
+        <div 
+          ref={logContainerRef}
+          className="absolute bottom-2 left-2 md:bottom-4 md:left-4 text-xs text-gray-300 bg-black/30 p-2 rounded max-w-sm max-h-24 overflow-y-auto"
+        >
+          {messages.map((msg, index) => (
+            <p key={index} className="leading-tight">{msg}</p>
+          ))}
         </div>
-      </div>
-      
-      <div className="absolute top-2 right-24 md:top-4 md:right-40 flex items-center gap-2">
-         <p className="text-xs text-gray-400 hidden sm:block">Goal: {GOAL_COORDS.x},{GOAL_COORDS.y}</p>
-        <div className="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center">
-        {isAtGoal ? (
-          <span className="text-lg text-red-500 animate-pulse">!</span>
-        ) : (
-          <div style={{ transform: `rotate(${angle}deg)` }}>
-            <span className="text-cyan-400 text-lg">↑</span>
+        
+        {/* Right Side: Goal Indicator & Buttons */}
+        <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-2 text-right">
+             <div className="hidden sm:block">
+               <p className="text-xs text-gray-400">Goal</p>
+               <p className="text-sm font-bold text-white">{GOAL_COORDS.x},{GOAL_COORDS.y}</p>
+             </div>
+             <div className="relative w-12 h-12 rounded-full bg-cyan-900/70 flex items-center justify-center border-2 border-cyan-600 animate-subtle-pulse">
+                {isAtGoal ? (
+                  <>
+                    <span className="absolute h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
+                    <span className="relative text-2xl font-bold text-white">!</span>
+                  </>
+                ) : (
+                  <div style={{ transform: `rotate(${angle}deg)` }}>
+                    <span className="text-cyan-400 text-2xl font-bold">↑</span>
+                  </div>
+                )}
+             </div>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={onToggleMute}
+              className="p-2 bg-cyan-800/80 text-white rounded-md hover:bg-cyan-700/80 transition-colors duration-200"
+              aria-label={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l-4-4m0 4l4-4" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+              )}
+            </button>
+            <button 
+              onClick={() => setIsConfirmingExit(true)}
+              className="px-4 py-2 bg-red-600 text-white font-bold text-sm rounded-md hover:bg-red-500 transition-colors duration-200"
+            >
+              EXIT
+            </button>
+          </div>
         </div>
       </div>
 
-      <div 
-        ref={logContainerRef}
-        className="absolute bottom-2 left-2 md:bottom-4 md:left-4 text-xs text-gray-300 bg-black/30 p-2 rounded max-w-sm max-h-24 overflow-y-auto"
-      >
-        {messages.map((msg, index) => (
-          <p key={index} className="leading-tight">{msg}</p>
-        ))}
-      </div>
-      
-      <div className="flex items-center gap-2">
-        <button 
-          onClick={onToggleMute}
-          className="p-2 bg-cyan-800/80 text-white rounded-md hover:bg-cyan-700/80 transition-colors duration-200"
-          aria-label={isMuted ? "Unmute" : "Mute"}
-        >
-          {isMuted ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l-4-4m0 4l4-4" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-            </svg>
-          )}
-        </button>
-        <button 
-          onClick={onExit}
-          className="px-4 py-2 bg-red-600 text-white font-bold text-sm rounded-md hover:bg-red-500 transition-colors duration-200"
-        >
-          EXIT
-        </button>
-      </div>
-    </div>
+      {isConfirmingExit && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] animate-fade-in">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-2xl text-center">
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4">Exit to Main Menu?</h2>
+            <p className="text-gray-400 mb-6">Your progress will be lost.</p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => setIsConfirmingExit(false)}
+                className="px-6 py-2 bg-gray-600 text-white font-bold rounded-md hover:bg-gray-500 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onExit}
+                className="px-6 py-2 bg-red-600 text-white font-bold rounded-md hover:bg-red-500 transition-colors"
+              >
+                Confirm Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
