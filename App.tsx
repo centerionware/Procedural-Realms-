@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { GameState } from './types';
 import MainMenu from './components/MainMenu';
 import GameView from './components/GameView';
@@ -9,6 +9,35 @@ import { initializeWorldSeed } from './game/generators/playfieldGenerator';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MAIN_MENU);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = useCallback(() => {
+    if (!installPrompt) {
+      return;
+    }
+    installPrompt.prompt();
+    installPrompt.userChoice.then((choiceResult: { outcome: 'accepted' | 'dismissed' }) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      setInstallPrompt(null);
+    });
+  }, [installPrompt]);
 
   const startGame = useCallback(() => {
     initializeWorldSeed(Date.now());
@@ -43,7 +72,7 @@ const App: React.FC = () => {
         return <Credits onRestart={backToMenu} />;
       case GameState.MAIN_MENU:
       default:
-        return <MainMenu onStartGame={startGame} />;
+        return <MainMenu onStartGame={startGame} onInstall={handleInstallClick} showInstallButton={!!installPrompt} />;
     }
   };
 

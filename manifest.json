@@ -1,0 +1,17 @@
+{
+  "name": "Procedural Realms",
+  "short_name": "Realms",
+  "description": "A mobile-first adventure game featuring a robust, extensible game system with procedurally generated characters, items, and playfields. This application serves as a blueprint for modern game architecture in React.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1f2937",
+  "theme_color": "#06b6d4",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

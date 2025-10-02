@@ -3,9 +3,13 @@ import React from 'react';
 
 interface MainMenuProps {
   onStartGame: () => void;
+  onInstall: () => void;
+  showInstallButton: boolean;
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, onInstall, showInstallButton }) => {
+  const isStandalone = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches;
+
   return (
     <div className="flex flex-col items-center justify-center text-center p-8 bg-gray-800 rounded-lg shadow-2xl animate-fade-in">
       <h1 className="text-5xl md:text-7xl font-bold text-cyan-400 mb-2 tracking-widest">
@@ -18,6 +22,15 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
       >
         START GAME
       </button>
+      {showInstallButton && !isStandalone && (
+        <button
+          onClick={onInstall}
+          className="mt-4 px-8 py-4 bg-purple-600 text-white font-bold text-xl rounded-md hover:bg-purple-500 transform hover:scale-105 transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-purple-300"
+          aria-label="Install App"
+        >
+          INSTALL APP
+        </button>
+      )}
     </div>
   );
 };
