@@ -403,7 +403,8 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
       const distanceToPlayer = getDistance(enemy.position, playerStateForFrame.position);
       let newEnemy = { ...enemy };
 
-      if (distanceToPlayer < 400 && distanceToPlayer > enemy.size * 0.8) {
+      const detectionRange = enemy.detectionRange || 400;
+      if (distanceToPlayer < detectionRange && distanceToPlayer > enemy.size * 0.8) {
         const dx = playerStateForFrame.position.x - enemy.position.x;
         const dy = playerStateForFrame.position.y - enemy.position.y;
         const len = Math.sqrt(dx*dx + dy*dy);

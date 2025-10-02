@@ -36,6 +36,7 @@ export interface Enemy {
   position: Vector2;
   isBoss?: boolean;
   size: number;
+  detectionRange?: number;
 }
 
 export interface Character {
