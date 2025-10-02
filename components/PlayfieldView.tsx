@@ -174,19 +174,27 @@ const PlayfieldView: React.FC<PlayfieldViewProps> = ({ playerPosition, playfield
       items.forEach(({ item, position }) => {
         ctx.save();
         ctx.translate(position.x, position.y);
-        const alpha = 0.75 + Math.sin(time / 200) * 0.25;
-        ctx.globalAlpha = alpha;
-        if (item.type === ItemType.EASTER_EGG) {
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(0, 0, TILE_SIZE * 0.075, 0, Math.PI * 2);
-          ctx.fill();
+        
+        if (item.type === ItemType.GLITCHED_ITEM_CONTAINER) {
+            ctx.globalAlpha = 1;
+            const size = TILE_SIZE * 0.3;
+            const colors = ['#ff00ff', '#00ffff', '#ffff00', '#ffffff'];
+            for (let i = 0; i < 3; i++) {
+                ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                const xOffset = (Math.random() - 0.5) * size;
+                const yOffset = (Math.random() - 0.5) * size;
+                const flickerSize = size * 0.5 * (0.5 + Math.random() * 0.5);
+                ctx.fillRect(xOffset - flickerSize / 2, yOffset - flickerSize / 2, flickerSize, flickerSize);
+            }
         } else {
-          ctx.fillStyle = item.type === ItemType.WEAPON ? '#ef4444' : '#34d399';
-          ctx.beginPath();
-          ctx.arc(0, 0, TILE_SIZE * 0.1, 0, Math.PI * 2);
-          ctx.fill();
+            const alpha = 0.75 + Math.sin(time / 200) * 0.25;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = item.type === ItemType.WEAPON ? '#ef4444' : '#34d399';
+            ctx.beginPath();
+            ctx.arc(0, 0, TILE_SIZE * 0.1, 0, Math.PI * 2);
+            ctx.fill();
         }
+
         ctx.restore();
       });
 
@@ -221,6 +229,21 @@ const PlayfieldView: React.FC<PlayfieldViewProps> = ({ playerPosition, playfield
       ctx.save();
       ctx.translate(Math.round(playerPosition.x), Math.round(playerPosition.y));
       drawCharacter(ctx, player.character.sprite, TILE_SIZE);
+
+      const hasDot = player.inventory.some(item => item.type === ItemType.EASTER_EGG);
+      if (hasDot) {
+          const orbitRadius = TILE_SIZE * 0.4;
+          const offsetX = TILE_SIZE / 2 + (Math.sin(time / 200) * orbitRadius);
+          const offsetY = TILE_SIZE / 2 + (Math.cos(time / 250) * orbitRadius);
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = "cyan";
+          ctx.shadowBlur = 5;
+          ctx.beginPath();
+          ctx.arc(offsetX, offsetY, TILE_SIZE * 0.06, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+      }
+      
       const isPlayerHit = hitEffects[player.id] && Date.now() - hitEffects[player.id] < 200;
       if (isPlayerHit) {
           const hitProgress = (Date.now() - hitEffects[player.id]) / 200;

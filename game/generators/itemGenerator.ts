@@ -58,14 +58,21 @@ export const generateItem = (isBossDrop?: boolean): Item => {
   }
 };
 
-const generateEasterEgg = (): Item => ({
+export const generateEasterEgg = (): Item => ({
   id: 'EASTER_EGG_DOT',
   name: 'Pixel of Origin',
   description: 'A tiny, shimmering dot. Feels important. Take it to 0,0.',
   type: ItemType.EASTER_EGG,
 });
 
-export const generateInitialItems = (mapKey: string, count: number, worldWidth: number, worldHeight: number, playfield: Playfield): ({ item: Item } & { position: Vector2 })[] => {
+const generateGlitchedItem = (): Item => ({
+    id: 'GLITCHED_ITEM_CONTAINER',
+    name: 'Anomalous Fragment',
+    description: 'A flickering, unstable piece of reality. It feels... wrong.',
+    type: ItemType.GLITCHED_ITEM_CONTAINER,
+});
+
+export const generateInitialItems = (mapKey: string, count: number, worldWidth: number, worldHeight: number, playfield: Playfield, easterEggMapKey: string): ({ item: Item } & { position: Vector2 })[] => {
     const validTiles: Vector2[] = [];
     playfield.forEach((row, y) => {
         row.forEach((tile, x) => {
@@ -91,14 +98,14 @@ export const generateInitialItems = (mapKey: string, count: number, worldWidth: 
         return { item: generateItem(), position };
     });
 
-    if (mapKey === '5,5' && validTiles.length > itemsToSpawn) {
+    if (mapKey === easterEggMapKey && validTiles.length > itemsToSpawn) {
         const tile = validTiles[itemsToSpawn];
         const position = {
              x: tile.x * TILE_SIZE + (Math.random() * (TILE_SIZE / 2)),
              y: tile.y * TILE_SIZE + (Math.random() * (TILE_SIZE / 2)),
         };
         items.push({
-            item: generateEasterEgg(),
+            item: generateGlitchedItem(),
             position,
         });
     }

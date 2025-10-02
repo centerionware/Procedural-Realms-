@@ -54,6 +54,7 @@ export enum ItemType {
   WEAPON,
   UPGRADE,
   EASTER_EGG,
+  GLITCHED_ITEM_CONTAINER,
 }
 
 export interface Item {

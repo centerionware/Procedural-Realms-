@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Player, Item, Enemy, Vector2, ItemType, Weapon, Upgrade, PlayerStats, DamageNumber, WorldMap, Playfield, TileType } from '../types';
 import { generateInitialPlayer } from '../game/player';
 import { generatePlayfield } from '../game/generators/playfieldGenerator';
-import { generateInitialItems, generateItem } from '../game/generators/itemGenerator';
+import { generateInitialItems, generateItem, generateEasterEgg } from '../game/generators/itemGenerator';
 import { populateEnemies } from '../game/generators/enemyGenerator';
 import useGameLoop from '../hooks/useGameLoop';
 import usePlayerInput from '../hooks/usePlayerInput';
@@ -124,6 +124,15 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   }, []);
 
   const [currentMapKey, setCurrentMapKey] = useState('0,0');
+  const [easterEggLocation] = useState(() => {
+    const x = Math.floor(Math.random() * 20) - 10; // e.g., -10 to 9
+    const y = Math.floor(Math.random() * 20) - 10;
+    // Avoid 0,0, 10,10, and the immediate vicinity of 0,0
+    if ((Math.abs(x) <= 1 && Math.abs(y) <= 1) || (x === 10 && y === 10)) {
+        return '5,5'; // fallback
+    }
+    return `${x},${y}`;
+  });
   
   const [messages, setMessages] = useState<string[]>([
     'A rift has opened! A powerful being threatens the realms.',
@@ -169,7 +178,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   useEffect(() => {
     if (!worldRef.current.has(currentMapKey)) {
       const { playfield: newPlayfield, colors: newColors } = generatePlayfield(MAP_WIDTH_TILES, MAP_HEIGHT_TILES, currentMapKey);
-      const newItems = generateInitialItems(currentMapKey, 20, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield);
+      const newItems = generateInitialItems(currentMapKey, 20, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, easterEggLocation);
       const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, playerRef.current);
       
       const newMapData: WorldMap = {
@@ -192,7 +201,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
              });
         }
     }
-  }, [currentMapKey, setWorld]);
+  }, [currentMapKey, setWorld, easterEggLocation]);
 
   useEffect(() => {
     if (!transition) return;
@@ -452,7 +461,6 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
     const itemsBeforePickup = newItems.length;
     newItems = newItems.filter(i => {
-      // If we've already picked this item up on this map, filter it out.
       if (pickedUpItemIds.current.has(i.item.id)) {
         return false;
       }
@@ -463,29 +471,38 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
       };
       const pickupRadius = PLAYER_SIZE * 0.75;
 
-      // Check for new pickup
       if (getDistance(playerCenter, i.position) < pickupRadius) {
         pickedUpItemIds.current.add(i.item.id);
-        addMessage(`⭐ Picked up ${i.item.name}!`);
         audioManager.current?.playSound('pickup');
-        setPlayer(p => {
-          const newPlayer = {...p, inventory: [...p.inventory, i.item]};
-          if (i.item.type === ItemType.UPGRADE) {
-            const upgrade = i.item as Upgrade;
-            Object.keys(upgrade.statBoost).forEach(key => {
-              const stat = key as keyof PlayerStats;
-              newPlayer.stats[stat] = (newPlayer.stats[stat] || 0) + (upgrade.statBoost[stat] || 0);
+        
+        let itemToAdd: Item | null = i.item;
+        if (i.item.type === ItemType.GLITCHED_ITEM_CONTAINER) {
+            addMessage(`❓ Picked up the Anomaly... something is stuck to you.`);
+            itemToAdd = generateEasterEgg();
+        } else {
+            addMessage(`⭐ Picked up ${i.item.name}!`);
+        }
+        
+        if (itemToAdd) {
+            setPlayer(p => {
+              const newPlayer = {...p, inventory: [...p.inventory, itemToAdd!]};
+              if (itemToAdd!.type === ItemType.UPGRADE) {
+                const upgrade = itemToAdd as Upgrade;
+                Object.keys(upgrade.statBoost).forEach(key => {
+                  const stat = key as keyof PlayerStats;
+                  newPlayer.stats[stat] = (newPlayer.stats[stat] || 0) + (upgrade.statBoost[stat] || 0);
+                });
+                newPlayer.currentHealth = Math.min(newPlayer.stats.maxHealth, newPlayer.currentHealth + (upgrade.statBoost.maxHealth || 10));
+              } else if (itemToAdd!.type === ItemType.WEAPON) {
+                const weapon = itemToAdd as Weapon;
+                if (!newPlayer.equippedWeapon || weapon.damage > newPlayer.equippedWeapon.damage) {
+                  newPlayer.equippedWeapon = weapon;
+                  addMessage(`Equipped ${weapon.name}.`);
+                }
+              }
+              return newPlayer;
             });
-            newPlayer.currentHealth = Math.min(newPlayer.stats.maxHealth, newPlayer.currentHealth + (upgrade.statBoost.maxHealth || 10));
-          } else if (i.item.type === ItemType.WEAPON) {
-            const weapon = i.item as Weapon;
-            if (!newPlayer.equippedWeapon || weapon.damage > newPlayer.equippedWeapon.damage) {
-              newPlayer.equippedWeapon = weapon;
-              addMessage(`Equipped ${weapon.name}.`);
-            }
-          }
-          return newPlayer;
-        });
+        }
         return false; // Remove from list
       }
       return true; // Keep in list

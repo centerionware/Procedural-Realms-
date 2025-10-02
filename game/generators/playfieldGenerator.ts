@@ -23,6 +23,16 @@ function mulberry32(a: number) {
 
 // --- World Maze Generation ---
 
+let highwayEdges: Set<string> = new Set();
+let worldSeed = 0;
+
+export const initializeWorldSeed = (seed: number) => {
+    worldSeed = seed;
+    const path_5_5 = generateWindingPath("0,0", "5,5");
+    const path_10_10 = generateWindingPath("0,0", "10,10");
+    highwayEdges = new Set([...path_5_5, ...path_10_10]);
+};
+
 /**
  * Generates a winding, deterministic path of edges between two points on the world grid.
  * @returns A Set of edge strings, e.g., "0,0:0,1".
@@ -35,7 +45,7 @@ const generateWindingPath = (startKey: string, endKey: string): Set<string> => {
     let [currentX, currentY] = [startX, startY];
     let previousKey = startKey;
 
-    const seed = hashCode(startKey + endKey);
+    const seed = hashCode(startKey + endKey) ^ worldSeed;
     const random = mulberry32(seed);
 
     let safety = 0;
@@ -74,10 +84,6 @@ const generateWindingPath = (startKey: string, endKey: string): Set<string> => {
     return pathEdges;
 };
 
-const path_5_5 = generateWindingPath("0,0", "5,5");
-const path_10_10 = generateWindingPath("0,0", "10,10");
-const highwayEdges = new Set([...path_5_5, ...path_10_10]);
-
 /**
  * Determines which of the four exits for a given room are open, based on the guaranteed
  * highway path and random side-paths.
@@ -89,7 +95,7 @@ const getRoomExits = (x: number, y: number): { north: boolean, east: boolean, so
   const checkConnection = (key1: string, key2: string, seedKey: string) => {
     const edge = [key1, key2].sort().join(':');
     if (highwayEdges.has(edge)) return true;
-    const seed = hashCode(seedKey);
+    const seed = hashCode(seedKey) ^ worldSeed;
     return mulberry32(seed)() < CHANCE_FOR_SIDE_PATH;
   };
 
@@ -257,7 +263,7 @@ const carveGuaranteedPath = (field: Playfield, width: number, height: number, ra
 
 
 export const generatePlayfield = (width: number, height: number, mapKey: string): { playfield: Playfield, colors: MapColors } => {
-  const seed = hashCode(mapKey);
+  const seed = hashCode(mapKey) ^ worldSeed;
   const random = mulberry32(seed);
   const colors = COLOR_PALETTES[Math.floor(random() * COLOR_PALETTES.length)];
 
@@ -314,26 +320,15 @@ export const generatePlayfield = (width: number, height: number, mapKey: string)
   ];
   
   exitTiles.forEach(({ isOpen, x, y, dir }) => {
-    const tileType = isOpen ? TileType.EXIT : TileType.WALL;
-    if (dir === 'north') {
-      for (let i = -1; i <= 1; i++) {
+    const tileType = isOpen ? TileType.FLOOR : TileType.WALL;
+    const exitSize = 1;
+    if (dir === 'north' || dir === 'south') {
+      for (let i = -exitSize; i <= exitSize; i++) {
         field[y][x + i] = tileType;
-        field[y + 1][x + i] = tileType;
       }
-    } else if (dir === 'south') {
-      for (let i = -1; i <= 1; i++) {
-        field[y][x + i] = tileType;
-        field[y - 1][x + i] = tileType;
-      }
-    } else if (dir === 'west') {
-      for (let i = -1; i <= 1; i++) {
+    } else { // east or west
+      for (let i = -exitSize; i <= exitSize; i++) {
         field[y + i][x] = tileType;
-        field[y + i][x + 1] = tileType;
-      }
-    } else { // east
-      for (let i = -1; i <= 1; i++) {
-        field[y + i][x] = tileType;
-        field[y + i][x - 1] = tileType;
       }
     }
   });

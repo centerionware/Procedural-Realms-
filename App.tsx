@@ -5,11 +5,13 @@ import GameView from './components/GameView';
 import GameOver from './components/GameOver';
 import GameWon from './components/GameWon';
 import Credits from './components/Credits';
+import { initializeWorldSeed } from './game/generators/playfieldGenerator';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MAIN_MENU);
 
   const startGame = useCallback(() => {
+    initializeWorldSeed(Date.now());
     setGameState(GameState.IN_GAME);
   }, []);
 
