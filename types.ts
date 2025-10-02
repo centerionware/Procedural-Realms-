@@ -103,4 +103,5 @@ export interface WorldMap {
   items: ({ item: Item } & { position: Vector2 })[];
   enemies: Enemy[];
   colors: MapColors;
+  clearCount: number;
 }

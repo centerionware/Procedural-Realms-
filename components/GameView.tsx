@@ -179,20 +179,21 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     if (!worldRef.current.has(currentMapKey)) {
       const { playfield: newPlayfield, colors: newColors } = generatePlayfield(MAP_WIDTH_TILES, MAP_HEIGHT_TILES, currentMapKey);
       const newItems = generateInitialItems(currentMapKey, 20, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, easterEggLocation);
-      const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, playerRef.current);
+      const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, playerRef.current, 0);
       
       const newMapData: WorldMap = {
         playfield: newPlayfield,
         items: newItems,
         enemies: newEnemies,
         colors: newColors,
+        clearCount: 0,
       };
 
       setWorld(prevWorld => new Map(prevWorld).set(currentMapKey, newMapData));
     } else {
         const existingMap = worldRef.current.get(currentMapKey)!;
         if (existingMap.enemies.length === 0 && currentMapKey !== '10,10' && currentMapKey !== '0,0') {
-             const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, existingMap.playfield, playerRef.current);
+             const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, existingMap.playfield, playerRef.current, existingMap.clearCount);
              setWorld(prevWorld => {
                 const currentMap = prevWorld.get(currentMapKey);
                 if (!currentMap) return prevWorld;
@@ -398,7 +399,8 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     
     // Queue the actual state update for React to process.
     setPlayer(p => ({ ...p, position: newPos }));
-
+    
+    const enemiesBeforeUpdate = currentMapData.enemies.length;
     let updatedEnemies = currentMapData.enemies.map(enemy => {
       const distanceToPlayer = getDistance(enemy.position, playerStateForFrame.position);
       let newEnemy = { ...enemy };
@@ -459,6 +461,11 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
       }
       return false;
     });
+    
+    const wasClearedThisFrame = enemiesBeforeUpdate > 0 && updatedEnemies.length === 0 && currentMapKey !== '10,10' && currentMapKey !== '0,0';
+    if (wasClearedThisFrame) {
+      addMessage('A dark energy fills the area... It feels more dangerous.');
+    }
 
     const itemsBeforePickup = newItems.length;
     newItems = newItems.filter(i => {
@@ -512,10 +519,11 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
     const enemiesChanged = currentMapData.enemies.length !== updatedEnemies.length;
 
-    if (updatedEnemies.length > 0 || enemiesChanged || itemWasPickedUp) {
+    if (enemiesChanged || itemWasPickedUp || wasClearedThisFrame) {
       setWorld(prev => {
-        const currentMap = prev.get(currentMapKey) || currentMapData;
-        const newMapData = { ...currentMap, enemies: updatedEnemies, items: newItems };
+        const currentMap = prev.get(currentMapKey)!;
+        const newClearCount = wasClearedThisFrame ? currentMap.clearCount + 1 : currentMap.clearCount;
+        const newMapData = { ...currentMap, enemies: updatedEnemies, items: newItems, clearCount: newClearCount };
         return new Map(prev).set(currentMapKey, newMapData);
       });
     }

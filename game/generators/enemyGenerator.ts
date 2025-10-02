@@ -3,7 +3,7 @@ import { generateCharacter } from './characterGenerator';
 import { TILE_SIZE } from '../../components/GameView';
 import { findValidSpawnPosition } from './playfieldGenerator';
 
-const generateEnemy = (position: Vector2, mapKey: string, player: Player): Enemy => {
+const generateEnemy = (position: Vector2, mapKey: string, player: Player, clearFactor: number): Enemy => {
   const [mapX, mapY] = mapKey.split(',').map(Number);
   const dist = Math.max(0, Math.abs(mapX) + Math.abs(mapY));
 
@@ -29,10 +29,10 @@ const generateEnemy = (position: Vector2, mapKey: string, player: Player): Enemy
   };
 
   const stats = {
-    maxHealth: Math.round(baseStats.maxHealth * combatScaling),
-    attack: Math.round(baseStats.attack * combatScaling),
-    defense: Math.round(baseStats.defense * combatScaling),
-    speed: Math.round(baseStats.speed * mobilityScaling),
+    maxHealth: Math.round(baseStats.maxHealth * combatScaling * clearFactor),
+    attack: Math.round(baseStats.attack * combatScaling * clearFactor),
+    defense: Math.round(baseStats.defense * combatScaling * clearFactor),
+    speed: Math.round(baseStats.speed * mobilityScaling), // Speed does not scale with clears to avoid frustration
   };
 
   // FIX: Generate a character for the enemy before creating the enemy object.
@@ -99,7 +99,7 @@ const generateRiftLord = (position: Vector2): Enemy => {
     };
 }
 
-export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight: number, playfield: Playfield, player: Player): Enemy[] => {
+export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight: number, playfield: Playfield, player: Player, clearCount: number): Enemy[] => {
     const enemies: Enemy[] = [];
 
     if (mapKey === '10,10') {
@@ -111,9 +111,12 @@ export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight:
     const [mapX, mapY] = mapKey.split(',').map(Number);
     const dist = Math.abs(mapX) + Math.abs(mapY);
 
+    const statClearFactor = Math.pow(1.1, clearCount); // 10% stat boost per clear
+    const countClearFactor = Math.pow(1.15, clearCount); // 15% more enemies per clear
+
     // Exponentially increase enemy count with distance, capped for performance.
     const enemyCountFactor = Math.pow(1.05, dist);
-    let enemyCount = Math.min(30, Math.floor((8 + Math.random() * 5) * enemyCountFactor));
+    let enemyCount = Math.min(30, Math.floor(((8 + Math.random() * 5) * enemyCountFactor) * countClearFactor));
 
     // Boss chance increases with distance. Bosses spawn INSTEAD of regular enemies.
     const bossChance = 0.25 + Math.min(0.25, dist * 0.01); 
@@ -128,7 +131,7 @@ export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight:
 
     for (let i = 0; i < enemyCount; i++) {
         const spawnPos = findValidSpawnPosition(playfield, worldWidth, worldHeight);
-        enemies.push(generateEnemy(spawnPos, mapKey, player));
+        enemies.push(generateEnemy(spawnPos, mapKey, player, statClearFactor));
     }
 
     return enemies;
