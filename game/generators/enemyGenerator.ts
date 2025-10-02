@@ -1,3 +1,4 @@
+
 import { Enemy, Vector2, Playfield, Player } from '../../types';
 import { generateCharacter } from './characterGenerator';
 import { TILE_SIZE } from '../../components/GameView';
@@ -7,35 +8,29 @@ const generateEnemy = (position: Vector2, mapKey: string, player: Player, clearF
   const [mapX, mapY] = mapKey.split(',').map(Number);
   const dist = Math.max(0, Math.abs(mapX) + Math.abs(mapY));
 
-  // Exponential scaling for health/damage.
-  const distanceFactor = Math.pow(1.08, dist);
-  // More aggressive exponential scaling for speed and detection range.
-  const mobilityFactor = Math.pow(1.06, dist);
+  // Increased scaling factors for a steeper difficulty curve.
+  const distanceFactor = Math.pow(1.18, dist);
+  const mobilityFactor = Math.pow(1.10, dist);
 
-  // Factor in player power to ensure enemies keep up.
-  const playerPower = player.stats.attack + player.stats.defense + (player.stats.maxHealth / 10);
-  const initialPlayerPower = 10 + 5 + (100 / 10); // ATK + DEF + HP/10
-  const playerFactor = Math.max(1, playerPower / initialPlayerPower);
-
-  // Blend world difficulty and player power for scaling.
-  const combatScaling = ((distanceFactor + playerFactor) / 2) * (0.9 + Math.random() * 0.2);
-  const mobilityScaling = ((mobilityFactor + playerFactor) / 2) * (0.9 + Math.random() * 0.2);
+  // The 'clearFactor' is now more impactful.
+  const combatScaling = distanceFactor * clearFactor * (0.9 + Math.random() * 0.2);
+  const mobilityScaling = mobilityFactor * (0.9 + Math.random() * 0.2);
   
+  // Increased base stats to make early encounters more challenging.
   const baseStats = {
-    maxHealth: 25 + Math.floor(Math.random() * 20),
-    attack: 8 + Math.floor(Math.random() * 5),
+    maxHealth: 40 + Math.floor(Math.random() * 15),
+    attack: 10 + Math.floor(Math.random() * 4),
     defense: 2 + Math.floor(Math.random() * 3),
-    speed: 70 + Math.random() * 30, // Base speed
+    speed: 80 + Math.random() * 20,
   };
 
   const stats = {
-    maxHealth: Math.round(baseStats.maxHealth * combatScaling * clearFactor),
-    attack: Math.round(baseStats.attack * combatScaling * clearFactor),
-    defense: Math.round(baseStats.defense * combatScaling * clearFactor),
-    speed: Math.round(baseStats.speed * mobilityScaling), // Speed does not scale with clears to avoid frustration
+    maxHealth: Math.max(20, Math.round(baseStats.maxHealth * combatScaling)),
+    attack: Math.max(5, Math.round(baseStats.attack * combatScaling)),
+    defense: Math.max(1, Math.round(baseStats.defense * combatScaling)),
+    speed: Math.round(baseStats.speed * mobilityScaling),
   };
 
-  // FIX: Generate a character for the enemy before creating the enemy object.
   const character = generateCharacter();
 
   return {
@@ -45,17 +40,18 @@ const generateEnemy = (position: Vector2, mapKey: string, player: Player, clearF
     currentHealth: stats.maxHealth,
     position,
     size: TILE_SIZE,
-    detectionRange: Math.min(1200, 400 * mobilityFactor), // Cap detection range
+    detectionRange: Math.min(1200, 400 * mobilityFactor),
   };
 };
 
 const generateBoss = (position: Vector2): Enemy => {
   const character = generateCharacter();
   character.sprite.bodyColor = '#a855f7'; // Make bosses purple
+  // Significantly increased boss stats to maintain their threat level.
   const stats = {
-    maxHealth: 150 + Math.floor(Math.random() * 50),
-    attack: 20 + Math.floor(Math.random() * 10),
-    defense: 8 + Math.floor(Math.random() * 5),
+    maxHealth: 300 + Math.floor(Math.random() * 100),
+    attack: 40 + Math.floor(Math.random() * 20),
+    defense: 16 + Math.floor(Math.random() * 10),
     speed: 60 + Math.random() * 30,
   };
 
@@ -81,10 +77,11 @@ const generateRiftLord = (position: Vector2): Enemy => {
             eyeShape: 'square' as const,
         }
     };
+    // Significantly increased final boss stats for an epic encounter.
     const stats = {
-        maxHealth: 1000,
-        attack: 40,
-        defense: 20,
+        maxHealth: 3000,
+        attack: 80,
+        defense: 40,
         speed: 90,
     };
     return {
@@ -111,16 +108,17 @@ export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight:
     const [mapX, mapY] = mapKey.split(',').map(Number);
     const dist = Math.abs(mapX) + Math.abs(mapY);
 
-    const statClearFactor = Math.pow(1.1, clearCount); // 10% stat boost per clear
-    const countClearFactor = Math.pow(1.15, clearCount); // 15% more enemies per clear
+    // Increased scaling per clear to make farming a more strategic choice.
+    const statClearFactor = Math.pow(1.3, clearCount); // 30% stat boost per clear
+    const countClearFactor = Math.pow(1.3, clearCount); // 30% more enemies per clear
 
-    // Exponentially increase enemy count with distance, capped for performance.
-    const enemyCountFactor = Math.pow(1.05, dist);
-    let enemyCount = Math.min(30, Math.floor(((8 + Math.random() * 5) * enemyCountFactor) * countClearFactor));
+    // Increased enemy count scaling with distance.
+    const enemyCountFactor = Math.pow(1.12, dist);
+    // Slightly increased base enemy count.
+    let enemyCount = Math.min(30, Math.floor(((6 + Math.random() * 4) * enemyCountFactor) * countClearFactor));
 
-    // Boss chance increases with distance. Bosses spawn INSTEAD of regular enemies.
-    const bossChance = 0.25 + Math.min(0.25, dist * 0.01); 
-    if (dist > 2 && Math.random() < bossChance) {
+    const bossChance = 0.15 + Math.min(0.35, dist * 0.02);
+    if (dist > 3 && Math.random() < bossChance) {
         const spawnPos = findValidSpawnPosition(playfield, worldWidth, worldHeight);
         enemies.push(generateBoss(spawnPos));
         enemyCount -= 4; // A boss is worth ~4 regular enemies
