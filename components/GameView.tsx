@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Player, Item, Enemy, Vector2, ItemType, Weapon, Upgrade, PlayerStats, DamageNumber, WorldMap, Playfield, TileType } from '../types';
+import { Player, Item, Enemy, Vector2, ItemType, Weapon, Upgrade, PlayerStats, DamageNumber, WorldMap, Playfield, TileType, Difficulty } from '../types';
 import { generateInitialPlayer } from '../game/player';
 import { generatePlayfield } from '../game/generators/playfieldGenerator';
 import { generateInitialItems, generateItem, generateEasterEgg } from '../game/generators/itemGenerator';
@@ -100,10 +100,11 @@ interface GameViewProps {
   onGameOver: () => void;
   onGameWon: () => void;
   onShowCredits: () => void;
+  difficulty: Difficulty;
 }
 
-const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onShowCredits }) => {
-  const [player, _setPlayer] = useState<Player>(() => generateInitialPlayer());
+const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onShowCredits, difficulty }) => {
+  const [player, _setPlayer] = useState<Player>(() => generateInitialPlayer(difficulty));
   const playerRef = useRef(player);
   const setPlayer: React.Dispatch<React.SetStateAction<Player>> = useCallback((action) => {
     _setPlayer(currentPlayer => {
@@ -179,7 +180,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     if (!worldRef.current.has(currentMapKey)) {
       const { playfield: newPlayfield, colors: newColors } = generatePlayfield(MAP_WIDTH_TILES, MAP_HEIGHT_TILES, currentMapKey);
       const newItems = generateInitialItems(currentMapKey, 20, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, easterEggLocation);
-      const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, playerRef.current, 0);
+      const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, playerRef.current, 0, difficulty);
       
       const newMapData: WorldMap = {
         playfield: newPlayfield,
@@ -193,7 +194,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     } else {
         const existingMap = worldRef.current.get(currentMapKey)!;
         if (existingMap.enemies.length === 0 && currentMapKey !== '10,10' && currentMapKey !== '0,0') {
-             const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, existingMap.playfield, playerRef.current, existingMap.clearCount);
+             const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, existingMap.playfield, playerRef.current, existingMap.clearCount, difficulty);
              setWorld(prevWorld => {
                 const currentMap = prevWorld.get(currentMapKey);
                 if (!currentMap) return prevWorld;
@@ -202,7 +203,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
              });
         }
     }
-  }, [currentMapKey, setWorld, easterEggLocation]);
+  }, [currentMapKey, setWorld, easterEggLocation, difficulty]);
 
   useEffect(() => {
     if (!transition) return;

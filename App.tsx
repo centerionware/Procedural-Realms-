@@ -1,14 +1,16 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { GameState } from './types';
+import { GameState, Difficulty } from './types';
 import MainMenu from './components/MainMenu';
 import GameView from './components/GameView';
 import GameOver from './components/GameOver';
 import GameWon from './components/GameWon';
 import Credits from './components/Credits';
+import DifficultyMenu from './components/DifficultyMenu';
 import { initializeWorldSeed } from './game/generators/playfieldGenerator';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MAIN_MENU);
+  const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [showOpenInNewTabButton, setShowOpenInNewTabButton] = useState(false);
   
@@ -67,8 +69,13 @@ const App: React.FC = () => {
     window.open(window.location.href, '_blank');
   }, []);
 
-  const startGame = useCallback(() => {
+  const showDifficultyMenu = useCallback(() => {
+    setGameState(GameState.DIFFICULTY_SELECTION);
+  }, []);
+
+  const startGame = useCallback((selectedDifficulty: Difficulty) => {
     initializeWorldSeed(Date.now());
+    setDifficulty(selectedDifficulty);
     setGameState(GameState.IN_GAME);
   }, []);
 
@@ -91,7 +98,9 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (gameState) {
       case GameState.IN_GAME:
-        return <GameView onExit={backToMenu} onGameOver={gameOver} onGameWon={gameWon} onShowCredits={showCredits} />;
+        return <GameView difficulty={difficulty} onExit={backToMenu} onGameOver={gameOver} onGameWon={gameWon} onShowCredits={showCredits} />;
+      case GameState.DIFFICULTY_SELECTION:
+        return <DifficultyMenu onSelectDifficulty={startGame} onBack={backToMenu} />;
       case GameState.GAME_OVER:
         return <GameOver onRestart={backToMenu} />;
       case GameState.GAME_WON:
@@ -102,7 +111,7 @@ const App: React.FC = () => {
       default:
         return (
           <MainMenu 
-            onStartGame={startGame} 
+            onStartGame={showDifficultyMenu} 
             onInstall={handleInstallClick} 
             showInstallButton={!!installPrompt}
             onOpenInNewTab={handleOpenInNewTab}

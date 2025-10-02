@@ -1,9 +1,18 @@
 export enum GameState {
   MAIN_MENU,
+  DIFFICULTY_SELECTION,
   IN_GAME,
   GAME_OVER,
   GAME_WON,
   SHOW_CREDITS,
+}
+
+export enum Difficulty {
+  EASY,
+  MEDIUM,
+  HARD,
+  IMPOSSIBLE,
+  GOD_MODE,
 }
 
 export interface Vector2 {
