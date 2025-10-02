@@ -401,6 +401,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     setPlayer(p => ({ ...p, position: newPos }));
     
     const enemiesBeforeUpdate = currentMapData.enemies.length;
+    let combatOccurred = false;
     let updatedEnemies = currentMapData.enemies.map(enemy => {
       const distanceToPlayer = getDistance(enemy.position, playerStateForFrame.position);
       let newEnemy = { ...enemy };
@@ -416,6 +417,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
       if (distanceToPlayer < enemy.size && (now - (lastCombatTimeRef.current[enemy.id] || 0) > 1000)) {
         lastCombatTimeRef.current[enemy.id] = now;
+        combatOccurred = true;
         
         const damageToPlayer = Math.max(1, enemy.stats.attack - playerStateForFrame.stats.defense);
         addMessage(`💥 Took ${damageToPlayer} damage!`);
@@ -519,7 +521,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
     const enemiesChanged = currentMapData.enemies.length !== updatedEnemies.length;
 
-    if (enemiesChanged || itemWasPickedUp || wasClearedThisFrame) {
+    if (enemiesChanged || itemWasPickedUp || wasClearedThisFrame || combatOccurred) {
       setWorld(prev => {
         const currentMap = prev.get(currentMapKey)!;
         const newClearCount = wasClearedThisFrame ? currentMap.clearCount + 1 : currentMap.clearCount;
