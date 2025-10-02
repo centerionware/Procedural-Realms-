@@ -31,27 +31,51 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // Use a "stale-while-revalidate" strategy.
-    // This allows the app to load quickly from the cache while checking for updates in the background.
+    // We only want to handle GET requests
     if (event.request.method !== 'GET') {
         return;
     }
-    
+
     event.respondWith(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.match(event.request).then((cachedResponse) => {
-                const fetchPromise = fetch(event.request).then((networkResponse) => {
-                    // If we receive a valid response, update the cache.
+        caches.open(CACHE_NAME).then(async (cache) => {
+            // Try to get the response from the cache
+            const cachedResponse = await cache.match(event.request);
+
+            // Fetch from the network in parallel
+            const networkResponsePromise = fetch(event.request)
+                .then(networkResponse => {
+                    // If we get a valid response, update the cache
                     if (networkResponse && networkResponse.status === 200) {
                         cache.put(event.request, networkResponse.clone());
                     }
                     return networkResponse;
+                }).catch(error => {
+                    // This will be hit when offline. The promise resolves to null.
+                    console.warn(`Fetch failed for ${event.request.url}.`, error);
+                    return null;
                 });
 
-                // Return the cached response immediately if it exists,
-                // otherwise, wait for the network response.
-                // The fetchPromise will update the cache for the next visit.
-                return cachedResponse || fetchPromise;
+            // Return the cached response immediately if it exists.
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+
+            // Otherwise, wait for the network response.
+            const networkResponse = await networkResponsePromise;
+            if (networkResponse) {
+                return networkResponse;
+            }
+
+            // If we're offline and the item wasn't in the cache,
+            // return the main app shell for navigation requests.
+            if (event.request.mode === 'navigate') {
+                return cache.match('/');
+            }
+
+            // For other assets, return a simple 404 response.
+            return new Response('Not Found', {
+                status: 404,
+                statusText: 'Not Found',
             });
         })
     );
