@@ -18,9 +18,9 @@ const generateEnemy = (position: Vector2, mapKey: string, player: Player, clearF
   
   // Increased base stats to make early encounters more challenging.
   const baseStats = {
-    maxHealth: 40 + Math.floor(Math.random() * 15),
-    attack: 10 + Math.floor(Math.random() * 4),
-    defense: 2 + Math.floor(Math.random() * 3),
+    maxHealth: (40 + Math.floor(Math.random() * 15)) * 3,
+    attack: (10 + Math.floor(Math.random() * 4)) * 3,
+    defense: (2 + Math.floor(Math.random() * 3)) * 3,
     speed: 80 + Math.random() * 20,
   };
 
@@ -49,9 +49,9 @@ const generateBoss = (position: Vector2): Enemy => {
   character.sprite.bodyColor = '#a855f7'; // Make bosses purple
   // Significantly increased boss stats to maintain their threat level.
   const stats = {
-    maxHealth: 300 + Math.floor(Math.random() * 100),
-    attack: 40 + Math.floor(Math.random() * 20),
-    defense: 16 + Math.floor(Math.random() * 10),
+    maxHealth: (300 + Math.floor(Math.random() * 100)) * 3,
+    attack: (40 + Math.floor(Math.random() * 20)) * 3,
+    defense: (16 + Math.floor(Math.random() * 10)) * 3,
     speed: 60 + Math.random() * 30,
   };
 
@@ -79,9 +79,9 @@ const generateRiftLord = (position: Vector2): Enemy => {
     };
     // Significantly increased final boss stats for an epic encounter.
     const stats = {
-        maxHealth: 3000,
-        attack: 80,
-        defense: 40,
+        maxHealth: 9000,
+        attack: 240,
+        defense: 120,
         speed: 90,
     };
     return {
