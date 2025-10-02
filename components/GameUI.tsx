@@ -6,11 +6,13 @@ interface GameUIProps {
   onExit: () => void;
   messages: string[];
   currentMapKey: string;
+  isMuted: boolean;
+  onToggleMute: () => void;
 }
 
 const GOAL_COORDS = { x: 10, y: 10 };
 
-const GameUI: React.FC<GameUIProps> = ({ player, onExit, messages, currentMapKey }) => {
+const GameUI: React.FC<GameUIProps> = ({ player, onExit, messages, currentMapKey, isMuted, onToggleMute }) => {
   const healthPercentage = (player.currentHealth / player.stats.maxHealth) * 100;
   
   const [currentX, currentY] = currentMapKey.split(',').map(Number);
@@ -52,7 +54,7 @@ const GameUI: React.FC<GameUIProps> = ({ player, onExit, messages, currentMapKey
         </div>
       </div>
       
-      <div className="absolute top-2 right-20 md:top-4 md:right-24 flex items-center gap-2">
+      <div className="absolute top-2 right-24 md:top-4 md:right-40 flex items-center gap-2">
          <p className="text-xs text-gray-400 hidden sm:block">Goal: {GOAL_COORDS.x},{GOAL_COORDS.y}</p>
         <div className="w-8 h-8 rounded-full bg-gray-700/50 flex items-center justify-center">
         {isAtGoal ? (
@@ -73,13 +75,31 @@ const GameUI: React.FC<GameUIProps> = ({ player, onExit, messages, currentMapKey
           <p key={index} className="leading-tight">{msg}</p>
         ))}
       </div>
-
-      <button 
-        onClick={onExit}
-        className="px-4 py-2 bg-red-600 text-white font-bold text-sm rounded-md hover:bg-red-500 transition-colors duration-200"
-      >
-        EXIT
-      </button>
+      
+      <div className="flex items-center gap-2">
+        <button 
+          onClick={onToggleMute}
+          className="p-2 bg-cyan-800/80 text-white rounded-md hover:bg-cyan-700/80 transition-colors duration-200"
+          aria-label={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l-4-4m0 4l4-4" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            </svg>
+          )}
+        </button>
+        <button 
+          onClick={onExit}
+          className="px-4 py-2 bg-red-600 text-white font-bold text-sm rounded-md hover:bg-red-500 transition-colors duration-200"
+        >
+          EXIT
+        </button>
+      </div>
     </div>
   );
 };

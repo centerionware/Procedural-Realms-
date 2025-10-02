@@ -1,20 +1,32 @@
-import { Enemy, Vector2, Playfield } from '../../types';
+import { Enemy, Vector2, Playfield, Player } from '../../types';
 import { generateCharacter } from './characterGenerator';
 import { TILE_SIZE } from '../../components/GameView';
 import { findValidSpawnPosition } from './playfieldGenerator';
 
-const generateEnemy = (position: Vector2, mapKey: string): Enemy => {
+const generateEnemy = (position: Vector2, mapKey: string, player: Player): Enemy => {
   const [mapX, mapY] = mapKey.split(',').map(Number);
-  const distanceFromOrigin = Math.abs(mapX) + Math.abs(mapY);
+  const dist = Math.abs(mapX) + Math.abs(mapY);
+
+  // Distance acts as a cap on enemy power.
+  const distanceFactor = 1 + dist * 0.35;
+
+  // Player power is a measure of their current stats vs initial stats.
+  const playerPower = player.stats.attack + player.stats.defense + (player.stats.maxHealth / 10);
+  const initialPlayerPower = 10 + 5 + (100 / 10); // ATK + DEF + HP/10
+  const playerFactor = Math.max(1, playerPower / initialPlayerPower);
+
+  // Blend player and distance factors, capped by distance. This makes enemies
+  // scale with a powerful player, but ensures they're always tough far from spawn.
+  const combinedFactor = Math.min(distanceFactor, (distanceFactor + playerFactor) / 2);
   
-  // Enemies get 20% stronger for each map away from the start
-  const scalingFactor = 1 + distanceFromOrigin * 0.2;
+  // Add variance
+  const finalScalingFactor = combinedFactor * (0.9 + Math.random() * 0.2);
 
   const character = generateCharacter();
   const stats = {
-    maxHealth: Math.round((20 + Math.floor(Math.random() * 30)) * scalingFactor),
-    attack: Math.round((8 + Math.floor(Math.random() * 7)) * scalingFactor),
-    defense: 1 + Math.floor(Math.random() * 5) + Math.floor(distanceFromOrigin / 2),
+    maxHealth: Math.round((20 + Math.floor(Math.random() * 30)) * finalScalingFactor),
+    attack: Math.round((8 + Math.floor(Math.random() * 7)) * finalScalingFactor),
+    defense: Math.round((2 + Math.floor(Math.random() * 4)) * finalScalingFactor),
     speed: 60 + Math.random() * 90,
   };
 
@@ -76,7 +88,7 @@ const generateRiftLord = (position: Vector2): Enemy => {
     };
 }
 
-export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight: number, playfield: Playfield): Enemy[] => {
+export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight: number, playfield: Playfield, player: Player): Enemy[] => {
     const enemies: Enemy[] = [];
 
     if (mapKey === '10,10') {
@@ -89,7 +101,7 @@ export const populateEnemies = (mapKey: string, worldWidth: number, worldHeight:
 
     for (let i = 0; i < enemyCount; i++) {
         const spawnPos = findValidSpawnPosition(playfield, worldWidth, worldHeight);
-        enemies.push(generateEnemy(spawnPos, mapKey));
+        enemies.push(generateEnemy(spawnPos, mapKey, player));
     }
 
     // 25% chance to spawn a boss in the room

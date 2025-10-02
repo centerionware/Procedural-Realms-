@@ -8,6 +8,7 @@ import useGameLoop from '../hooks/useGameLoop';
 import usePlayerInput from '../hooks/usePlayerInput';
 import GameUI from './GameUI';
 import PlayfieldView from './PlayfieldView';
+import { AudioManager } from '../game/audio';
 
 export const TILE_SIZE = 40;
 export const PLAYER_SIZE = 40;
@@ -127,18 +128,25 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   const [damageNumbers, setDamageNumbers] = useState<DamageNumber[]>([]);
   const [moveTarget, setMoveTarget] = useState<Vector2 | null>(null);
   const [isPointerDown, setIsPointerDown] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const lastCombatTimeRef = useRef<{ [enemyId: string]: number }>({});
   const pickedUpItemIds = useRef(new Set<string>());
+  const audioManager = useRef<AudioManager | null>(null);
+
 
   const currentMapData = world.get(currentMapKey);
+
+  useEffect(() => {
+    audioManager.current = new AudioManager();
+  }, []);
 
   useEffect(() => {
     if (!worldRef.current.has(currentMapKey)) {
       const { playfield: newPlayfield, colors: newColors } = generatePlayfield(MAP_WIDTH_TILES, MAP_HEIGHT_TILES, currentMapKey);
       const newItems = generateInitialItems(currentMapKey, 20, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield);
-      const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield);
+      const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, newPlayfield, playerRef.current);
       
       const newMapData: WorldMap = {
         playfield: newPlayfield,
@@ -151,7 +159,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
     } else {
         const existingMap = worldRef.current.get(currentMapKey)!;
         if (existingMap.enemies.length === 0 && currentMapKey !== '10,10' && currentMapKey !== '0,0') {
-             const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, existingMap.playfield);
+             const newEnemies = populateEnemies(currentMapKey, MAP_WIDTH_TILES * TILE_SIZE, MAP_HEIGHT_TILES * TILE_SIZE, existingMap.playfield, playerRef.current);
              setWorld(prevWorld => {
                 const currentMap = prevWorld.get(currentMapKey);
                 if (!currentMap) return prevWorld;
@@ -160,6 +168,23 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
              });
         }
     }
+  }, [currentMapKey, setWorld]);
+
+  useEffect(() => {
+    const am = audioManager.current;
+    if (!am) return;
+
+    am.stopMusic();
+    
+    // If audio is already initialized, we can start music right away.
+    // Otherwise, it will be started on the first user interaction.
+    if (am.isInitialized) {
+        am.startMusic(currentMapKey);
+    }
+    
+    return () => {
+        am.stopMusic();
+    };
   }, [currentMapKey]);
   
   const addMessage = useCallback((message: string) => {
@@ -167,6 +192,15 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const am = audioManager.current;
+    if (am) {
+      const needsMusicStart = !am.isInitialized;
+      am.initialize();
+      if (needsMusicStart && am.isInitialized) {
+        // Music couldn't start on mount, so start it on first interaction.
+        am.startMusic(currentMapKey);
+      }
+    }
     setIsPointerDown(true);
     updateMoveTarget(event);
   };
@@ -180,6 +214,14 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
   const handlePointerUp = () => {
     setIsPointerDown(false);
   };
+  
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => {
+        const newMutedState = !prev;
+        audioManager.current?.toggleMute(newMutedState);
+        return newMutedState;
+    });
+  }, []);
 
   const updateMoveTarget = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!gameContainerRef.current) return;
@@ -309,6 +351,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
         
         const damageToPlayer = Math.max(1, enemy.stats.attack - playerStateForFrame.stats.defense);
         addMessage(`💥 Took ${damageToPlayer} damage!`);
+        audioManager.current?.playSound('playerHit');
         setScreenShake(10);
         setHitEffects(prev => ({...prev, [playerStateForFrame.id]: now}));
         setDamageNumbers(prev => [...prev, {
@@ -321,6 +364,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
         const playerAttack = playerStateForFrame.stats.attack + (playerStateForFrame.equippedWeapon?.damage || 0);
         const damageToEnemy = Math.max(1, playerAttack - enemy.stats.defense);
         addMessage(`⚔️ Dealt ${damageToEnemy} damage!`);
+        audioManager.current?.playSound('enemyHit');
         newEnemy.currentHealth = Math.max(0, newEnemy.currentHealth - damageToEnemy);
         setHitEffects(prev => ({...prev, [newEnemy.id]: now}));
         setDamageNumbers(prev => [...prev, {
@@ -338,10 +382,12 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
       
       if (enemy.id.startsWith('boss_RIFT_LORD')) {
         addMessage(`👑 THE RIFT LORD IS VANQUISHED!`);
+        audioManager.current?.playSound('defeat');
         onGameWon();
         return false;
       }
       addMessage(`💀 ${enemy.isBoss ? 'Boss' : 'Enemy'} vanquished!`);
+      audioManager.current?.playSound('defeat');
       if (Math.random() > 0.3 || enemy.isBoss) {
         newItems.push({ item: generateItem(enemy.isBoss), position: enemy.position });
       }
@@ -365,6 +411,7 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
       if (getDistance(playerCenter, i.position) < pickupRadius) {
         pickedUpItemIds.current.add(i.item.id);
         addMessage(`⭐ Picked up ${i.item.name}!`);
+        audioManager.current?.playSound('pickup');
         setPlayer(p => {
           const newPlayer = {...p, inventory: [...p.inventory, i.item]};
           if (i.item.type === ItemType.UPGRADE) {
@@ -404,7 +451,14 @@ const GameView: React.FC<GameViewProps> = ({ onExit, onGameOver, onGameWon, onSh
 
   return (
     <div className="w-full h-full flex flex-col">
-      <GameUI player={player} onExit={onExit} messages={messages} currentMapKey={currentMapKey} />
+      <GameUI 
+        player={player} 
+        onExit={onExit} 
+        messages={messages} 
+        currentMapKey={currentMapKey} 
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+      />
       <div 
         ref={gameContainerRef}
         onPointerDown={handlePointerDown}
