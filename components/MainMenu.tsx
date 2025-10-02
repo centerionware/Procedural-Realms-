@@ -5,9 +5,17 @@ interface MainMenuProps {
   onStartGame: () => void;
   onInstall: () => void;
   showInstallButton: boolean;
+  onOpenInNewTab: () => void;
+  showOpenInNewTabButton: boolean;
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, onInstall, showInstallButton }) => {
+const MainMenu: React.FC<MainMenuProps> = ({ 
+  onStartGame, 
+  onInstall, 
+  showInstallButton,
+  onOpenInNewTab,
+  showOpenInNewTabButton,
+}) => {
   const isStandalone = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches;
 
   return (
@@ -30,6 +38,18 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, onInstall, showInstall
         >
           INSTALL APP
         </button>
+      )}
+      {showOpenInNewTabButton && !showInstallButton && !isStandalone && (
+         <div className="mt-4 text-center">
+            <p className="text-sm text-gray-400 mb-2">Installation unavailable in this view.</p>
+            <button
+              onClick={onOpenInNewTab}
+              className="px-8 py-4 bg-green-600 text-white font-bold text-xl rounded-md hover:bg-green-500 transform hover:scale-105 transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-green-300"
+              aria-label="Open in new tab to install"
+            >
+              OPEN TO INSTALL
+            </button>
+         </div>
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+
 const CACHE_NAME = 'procedural-realms-cache-v1';
 const urlsToCache = [
     '/',
@@ -31,52 +32,53 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // We only want to handle GET requests
-    if (event.request.method !== 'GET') {
-        return;
-    }
+  // We only want to handle GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      
+      // 1. Try to get the response from the cache first (Cache-First).
+      const cachedResponse = await cache.match(event.request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      
+      // 2. If not in cache, try to fetch from the network.
+      try {
+        const networkResponse = await fetch(event.request);
+        
+        // On success, cache the new resource and return it.
+        // This will cache scripts, assets from the CDN, etc., on the first online visit.
+        if (networkResponse && networkResponse.status === 200) {
+          await cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
 
-    event.respondWith(
-        caches.open(CACHE_NAME).then(async (cache) => {
-            // Try to get the response from the cache
-            const cachedResponse = await cache.match(event.request);
-
-            // Fetch from the network in parallel
-            const networkResponsePromise = fetch(event.request)
-                .then(networkResponse => {
-                    // If we get a valid response, update the cache
-                    if (networkResponse && networkResponse.status === 200) {
-                        cache.put(event.request, networkResponse.clone());
-                    }
-                    return networkResponse;
-                }).catch(error => {
-                    // This will be hit when offline. The promise resolves to null.
-                    console.warn(`Fetch failed for ${event.request.url}.`, error);
-                    return null;
-                });
-
-            // Return the cached response immediately if it exists.
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-
-            // Otherwise, wait for the network response.
-            const networkResponse = await networkResponsePromise;
-            if (networkResponse) {
-                return networkResponse;
-            }
-
-            // If we're offline and the item wasn't in the cache,
-            // return the main app shell for navigation requests.
-            if (event.request.mode === 'navigate') {
-                return cache.match('/');
-            }
-
-            // For other assets, return a simple 404 response.
-            return new Response('Not Found', {
-                status: 404,
-                statusText: 'Not Found',
-            });
-        })
-    );
+      } catch (error) {
+        // 3. If the network fails (offline), provide a fallback.
+        console.log('Fetch failed; returning offline fallback for', event.request.url);
+        
+        // For page navigations, serving the main app shell is critical for installability.
+        if (event.request.mode === 'navigate') {
+          // Return the precached app shell ('/').
+          const fallbackResponse = await cache.match('/');
+          if (fallbackResponse) {
+              return fallbackResponse;
+          }
+        }
+        
+        // For other assets that are not cached and fail to fetch,
+        // we return a custom error. This prevents the browser from showing its default offline page.
+        return new Response('Resource not available offline.', {
+          status: 404,
+          statusText: 'Not Found',
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }
+    })()
+  );
 });
